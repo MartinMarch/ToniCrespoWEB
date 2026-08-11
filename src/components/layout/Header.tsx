@@ -3,9 +3,9 @@ import { Mail } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAdminSession } from "../../app/adminSession";
 import { languageOptions, useSitePreferences, type SiteTheme } from "../../app/sitePreferences";
-import toniCrespoLogo from "../../assets/toni_crespo_logo_vector.svg";
 import { artistContact } from "../../lib/contact";
 import { useContactDialog } from "../contact/ContactDialogProvider";
+import { ToniCrespoLogo } from "./ToniCrespoLogo";
 
 const HEADER_HIDE_OFFSET = 48;
 const SOCIAL_LINKS = [
@@ -97,7 +97,7 @@ export function Header() {
   return (
     <header className={`site-header${isHidden && !isSettingsOpen ? " site-header--hidden" : ""}`}>
       <NavLink to="/" className="brand" aria-label="Toni Crespo inicio">
-        <img src={toniCrespoLogo} alt="Toni Crespo" />
+        <ToniCrespoLogo />
       </NavLink>
       <nav className="main-nav" aria-label={labels.aria.mainNav}>
         {links.map((link) => (

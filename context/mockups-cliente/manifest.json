@@ -1,0 +1,218 @@
+{
+  "generatedAt": "2026-08-11T15:56:57.133Z",
+  "siteUrl": "http://127.0.0.1:4177",
+  "screenshots": [
+    {
+      "file": "desktop-01-inicio.png",
+      "label": "Inicio - pantalla de escritorio"
+    },
+    {
+      "file": "desktop-02-ajustes.png",
+      "label": "Ajustes de idioma, apariencia y edición - escritorio"
+    },
+    {
+      "file": "desktop-03-modo-oscuro.png",
+      "label": "Inicio en modo oscuro - escritorio"
+    },
+    {
+      "file": "desktop-04-formulario-correo.png",
+      "label": "Formulario de correo - escritorio"
+    },
+    {
+      "file": "desktop-05-acceso-edicion.png",
+      "label": "Acceso protegido al modo de edición - escritorio"
+    },
+    {
+      "file": "desktop-06-obra.png",
+      "label": "Obra, colecciones de lienzo y láminas - escritorio"
+    },
+    {
+      "file": "desktop-07-colecciones-lienzos.png",
+      "label": "Colecciones de lienzos - escritorio"
+    },
+    {
+      "file": "desktop-08-obras-coleccion.png",
+      "label": "Obras de una colección - escritorio"
+    },
+    {
+      "file": "desktop-09-ambientes.png",
+      "label": "Visualización de obra en ambientes - escritorio"
+    },
+    {
+      "file": "desktop-10-contacto-obra.png",
+      "label": "Contacto por una obra - escritorio"
+    },
+    {
+      "file": "desktop-11-detalle-obra.png",
+      "label": "Detalle ampliado de una obra - escritorio"
+    },
+    {
+      "file": "desktop-12-fotografia.png",
+      "label": "Fotografía - escritorio"
+    },
+    {
+      "file": "desktop-13-fotografia-ampliada.png",
+      "label": "Fotografía ampliada - escritorio"
+    },
+    {
+      "file": "desktop-14-noticias.png",
+      "label": "Noticias - escritorio"
+    },
+    {
+      "file": "desktop-15-busqueda-noticias.png",
+      "label": "Búsqueda de noticias - escritorio"
+    },
+    {
+      "file": "desktop-16-trayectoria.png",
+      "label": "Trayectoria - escritorio"
+    },
+    {
+      "file": "mobile-01-inicio.png",
+      "label": "Inicio - pantalla móvil"
+    },
+    {
+      "file": "mobile-02-ajustes.png",
+      "label": "Ajustes de idioma y apariencia - móvil"
+    },
+    {
+      "file": "mobile-03-inicio-ingles.png",
+      "label": "Inicio traducido al inglés - móvil"
+    },
+    {
+      "file": "mobile-04-formulario-correo.png",
+      "label": "Formulario de correo - móvil"
+    },
+    {
+      "file": "mobile-11-acceso-edicion.png",
+      "label": "Acceso protegido al modo de edición - móvil"
+    },
+    {
+      "file": "mobile-05-colecciones-lienzos.png",
+      "label": "Colecciones de lienzos - móvil"
+    },
+    {
+      "file": "mobile-06-obras-coleccion.png",
+      "label": "Obras de una colección - móvil"
+    },
+    {
+      "file": "mobile-12-ambientes.png",
+      "label": "Visualización de obra en ambientes - móvil"
+    },
+    {
+      "file": "mobile-07-contacto-obra.png",
+      "label": "Contacto por una obra - móvil"
+    },
+    {
+      "file": "mobile-13-detalle-obra.png",
+      "label": "Detalle ampliado de una obra - móvil"
+    },
+    {
+      "file": "mobile-08-fotografia.png",
+      "label": "Fotografía - móvil"
+    },
+    {
+      "file": "mobile-14-fotografia-ampliada.png",
+      "label": "Fotografía ampliada - móvil"
+    },
+    {
+      "file": "mobile-09-noticias.png",
+      "label": "Noticias - móvil"
+    },
+    {
+      "file": "mobile-15-busqueda-noticias.png",
+      "label": "Búsqueda de noticias - móvil"
+    },
+    {
+      "file": "mobile-10-trayectoria.png",
+      "label": "Trayectoria - móvil"
+    },
+    {
+      "file": "desktop-17-edicion-trayectoria.png",
+      "label": "Controles de edición de portada y trayectoria - escritorio"
+    },
+    {
+      "file": "desktop-18-edicion-galeria-trayectoria.png",
+      "label": "Gestión de la galería de trayectoria - escritorio"
+    },
+    {
+      "file": "desktop-19-editor-texto-trayectoria.png",
+      "label": "Editor multilingüe de trayectoria - escritorio"
+    },
+    {
+      "file": "desktop-20-edicion-noticias.png",
+      "label": "Controles de gestión de noticias - escritorio"
+    },
+    {
+      "file": "desktop-21-formulario-noticia.png",
+      "label": "Formulario para crear una noticia - escritorio"
+    },
+    {
+      "file": "desktop-22-edicion-fotografia.png",
+      "label": "Gestión de fotografías - escritorio"
+    },
+    {
+      "file": "desktop-23-editor-fotografia.png",
+      "label": "Editor de fotografía y traducciones - escritorio"
+    },
+    {
+      "file": "desktop-24-edicion-colecciones.png",
+      "label": "Gestión de colecciones - escritorio"
+    },
+    {
+      "file": "desktop-25-formulario-coleccion.png",
+      "label": "Formulario para crear una colección - escritorio"
+    },
+    {
+      "file": "desktop-26-editor-coleccion.png",
+      "label": "Editor de una colección existente - escritorio"
+    },
+    {
+      "file": "desktop-27-edicion-obras.png",
+      "label": "Gestión de obras en una colección - escritorio"
+    },
+    {
+      "file": "desktop-28-formulario-obra.png",
+      "label": "Formulario para añadir una obra - escritorio"
+    },
+    {
+      "file": "desktop-29-editor-obra.png",
+      "label": "Editor de una obra existente - escritorio"
+    },
+    {
+      "file": "mobile-16-edicion-trayectoria.png",
+      "label": "Controles de edición de trayectoria - móvil"
+    },
+    {
+      "file": "mobile-17-edicion-noticias.png",
+      "label": "Controles de gestión de noticias - móvil"
+    },
+    {
+      "file": "mobile-18-edicion-fotografia.png",
+      "label": "Gestión de fotografías - móvil"
+    },
+    {
+      "file": "mobile-19-edicion-colecciones.png",
+      "label": "Gestión de colecciones - móvil"
+    },
+    {
+      "file": "mobile-20-edicion-obras.png",
+      "label": "Gestión de obras en una colección - móvil"
+    },
+    {
+      "file": "desktop-30-eliminar-galeria-trayectoria.png",
+      "label": "Eliminación de una imagen de trayectoria - escritorio"
+    },
+    {
+      "file": "desktop-31-editor-obra-existente.png",
+      "label": "Controles de edición y eliminación de una obra - escritorio"
+    },
+    {
+      "file": "mobile-21-editor-obra-existente.png",
+      "label": "Controles de edición y eliminación de una obra - móvil"
+    },
+    {
+      "file": "mobile-22-editor-coleccion-existente.png",
+      "label": "Controles de edición y eliminación de una colección - móvil"
+    }
+  ]
+}

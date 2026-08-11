@@ -124,6 +124,7 @@ Importante: la escala actual está calibrada de forma interna por centímetros v
 ## Documentación relacionada
 
 - [context.md](/home/martinmarch/Repositorios/ToniCrespoWEB/context/context.md): índice de la documentación.
+- [mockups-cliente.md](/home/martinmarch/Repositorios/ToniCrespoWEB/context/mockups-cliente.md): dossier visual de escritorio y móvil, listo para convertir en PDF.
 - [diseno-interfaz.md](/home/martinmarch/Repositorios/ToniCrespoWEB/context/diseno-interfaz.md): decisiones visuales y responsive.
 - [frontend-architecture.md](/home/martinmarch/Repositorios/ToniCrespoWEB/context/frontend-architecture.md): estructura del frontend.
 - [../supabase/README.md](/home/martinmarch/Repositorios/ToniCrespoWEB/supabase/README.md): migraciones, validación y copias de seguridad operativas.

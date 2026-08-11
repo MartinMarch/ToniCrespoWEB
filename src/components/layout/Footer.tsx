@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useSitePreferences } from "../../app/sitePreferences";
-import toniCrespoLogo from "../../assets/toni_crespo_logo_vector.svg";
 import { artistContact } from "../../lib/contact";
+import { ToniCrespoLogo } from "./ToniCrespoLogo";
 
 export function Footer() {
   const { labels } = useSitePreferences();
@@ -11,7 +11,7 @@ export function Footer() {
       <div className="site-footer__inner">
         <div className="site-footer__brand-block">
           <Link to="/" className="site-footer__logo" aria-label="Toni Crespo inicio">
-            <img src={toniCrespoLogo} alt="Toni Crespo" />
+            <ToniCrespoLogo />
           </Link>
           <p>{labels.footer.location}</p>
         </div>

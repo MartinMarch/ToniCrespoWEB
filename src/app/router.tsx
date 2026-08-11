@@ -10,6 +10,8 @@ import { SupportCollectionDetailPage } from "../pages/SupportCollectionDetailPag
 import { SupportPage } from "../pages/SupportPage";
 import { WorksPage } from "../pages/WorksPage";
 
+const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
+
 export const router = createBrowserRouter([
   {
     element: <Layout />,
@@ -64,4 +66,4 @@ export const router = createBrowserRouter([
       },
     ],
   },
-]);
+], { basename });

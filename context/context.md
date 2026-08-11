@@ -14,6 +14,7 @@ Los documentos que hablan de WordPress, XML, mocks, `media-images/`, `currentSit
 - [diseno-interfaz.md](/home/martinmarch/Repositorios/ToniCrespoWEB/context/diseno-interfaz.md): dirección visual, header, footer, responsive y componentes de interfaz.
 - [frontend-architecture.md](/home/martinmarch/Repositorios/ToniCrespoWEB/context/frontend-architecture.md): estructura React, servicios, rutas y flujo de Supabase.
 - [tareas-pendientes.md](/home/martinmarch/Repositorios/ToniCrespoWEB/context/tareas-pendientes.md): backlog real pendiente.
+- [mockups-cliente.md](/home/martinmarch/Repositorios/ToniCrespoWEB/context/mockups-cliente.md): dossier visual con capturas reales de escritorio y móvil, preparado para su conversión a PDF.
 
 ## Obra, soportes y ambientes
 

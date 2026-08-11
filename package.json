@@ -13,7 +13,11 @@
     "verify:supabase": "node scripts/verify-supabase.mjs",
     "verify:supabase-backup": "node scripts/verify-supabase-backup.mjs",
     "backup:supabase": "node scripts/backup-supabase.mjs",
-    "restore:supabase": "node scripts/restore-supabase-backup.mjs"
+    "restore:supabase": "node scripts/restore-supabase-backup.mjs",
+    "capture:mockups": "node scripts/capture-client-mockups.mjs",
+    "capture:mockups:editing": "node scripts/capture-client-mockups.mjs --editing-only",
+    "render:mockups-pdf": "node scripts/render-client-mockups-pdf.mjs",
+    "preview:pages": "node scripts/preview-github-pages.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
