@@ -1,0 +1,51 @@
+name: Quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_supabase_integration:
+        description: Run the remote Supabase integration test
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  supabase-integration:
+    name: Supabase integration
+    needs: quality
+    runs-on: ubuntu-latest
+    if: >-
+      ${{ (vars.RUN_SUPABASE_INTEGRATION == 'true' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_supabase_integration)) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    env:
+      SUPABASE_TEST_RUN: "true"
+      SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+      SUPABASE_TEST_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
+      SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:supabase

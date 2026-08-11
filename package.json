@@ -1,0 +1,36 @@
+{
+  "name": "tonicrespo-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "lint": "tsc -b --noEmit",
+    "test": "node scripts/test-supabase-editing.mjs",
+    "test:supabase": "node scripts/test-supabase-editing.mjs",
+    "verify:supabase": "node scripts/verify-supabase.mjs",
+    "verify:supabase-backup": "node scripts/verify-supabase-backup.mjs",
+    "backup:supabase": "node scripts/backup-supabase.mjs",
+    "restore:supabase": "node scripts/restore-supabase-backup.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "lucide-react": "^1.31.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "typescript": "^5.6.2",
+    "vite": "^7.3.6",
+    "ws": "^8.21.3"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.62.2"
+  }
+}
