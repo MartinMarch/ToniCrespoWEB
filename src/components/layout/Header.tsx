@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Mail } from "lucide-react";
+import { Mail, Menu, X } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAdminSession } from "../../app/adminSession";
 import { languageOptions, useSitePreferences, type SiteTheme } from "../../app/sitePreferences";
@@ -28,9 +28,11 @@ export function Header() {
   const { isAdmin, isEditMode, requestEditing, setEditMode } = useAdminSession();
   const { openEmailComposer } = useContactDialog();
   const location = useLocation();
+  const headerRef = useRef<HTMLElement | null>(null);
   const lastScrollY = useRef(0);
   const settingsRef = useRef<HTMLLIElement | null>(null);
   const [isHidden, setIsHidden] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const links = [
     { label: labels.nav.work, path: "/obra" },
@@ -67,21 +69,24 @@ export function Header() {
   useEffect(() => {
     lastScrollY.current = window.scrollY;
     setIsHidden(false);
+    setIsMenuOpen(false);
     setIsSettingsOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
-    if (!isSettingsOpen) return;
+    if (!isSettingsOpen && !isMenuOpen) return;
 
     function handlePointerDown(event: PointerEvent) {
-      if (!settingsRef.current?.contains(event.target as Node)) {
+      if (!headerRef.current?.contains(event.target as Node)) {
         setIsSettingsOpen(false);
+        setIsMenuOpen(false);
       }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setIsSettingsOpen(false);
+        setIsMenuOpen(false);
       }
     }
 
@@ -92,34 +97,48 @@ export function Header() {
       window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isSettingsOpen]);
+  }, [isMenuOpen, isSettingsOpen]);
 
   return (
-    <header className={`site-header${isHidden && !isSettingsOpen ? " site-header--hidden" : ""}`}>
+    <header
+      ref={headerRef}
+      className={`site-header${isHidden && !isMenuOpen && !isSettingsOpen ? " site-header--hidden" : ""}${
+        isMenuOpen ? " site-header--menu-open" : ""
+      }`}
+    >
       <NavLink to="/" className="brand" aria-label="Toni Crespo inicio">
         <ToniCrespoLogo />
       </NavLink>
-      <nav className="main-nav" aria-label={labels.aria.mainNav}>
+      <nav className="main-nav" aria-label={labels.aria.mainNav} id="site-header-navigation">
         {links.map((link) => (
           <NavLink
             key={link.path}
             to={link.path}
+            onClick={() => setIsMenuOpen(false)}
             className={({ isActive }) => (isActive || isSectionActive(link.path, location.pathname) ? "active" : undefined)}
           >
             {link.label}
           </NavLink>
         ))}
       </nav>
+      <div className="header-mobile-shortcuts" aria-label={labels.aria.socials}>
+        {SOCIAL_LINKS.map(({ href, label, social, Icon }) => (
+          <a key={social} href={href} target="_blank" rel="noreferrer" className="header-mobile-shortcut">
+            <Icon />
+            <span>{label}</span>
+          </a>
+        ))}
+      </div>
       <ul className="header-socials" aria-label={labels.aria.socials}>
         {SOCIAL_LINKS.map(({ href, label, social, Icon }) => (
-          <li key={social} className="header-socials__item">
+          <li key={social} className="header-socials__item header-socials__item--social">
             <a href={href} target="_blank" rel="noreferrer" data-social={social} aria-label={label}>
               <span className="filled" />
               <Icon />
             </a>
           </li>
         ))}
-        <li className="header-socials__item">
+        <li className="header-socials__item header-socials__item--email">
           <button
             type="button"
             className="header-contact-trigger"
@@ -132,7 +151,7 @@ export function Header() {
             <Mail aria-hidden="true" />
           </button>
         </li>
-        <li className="header-socials__item header-settings" ref={settingsRef}>
+        <li className="header-socials__item header-socials__item--settings header-settings" ref={settingsRef}>
           <button
             type="button"
             className="header-settings__trigger"
@@ -140,7 +159,10 @@ export function Header() {
             aria-label={labels.settings.open}
             aria-expanded={isSettingsOpen}
             aria-haspopup="dialog"
-            onClick={() => setIsSettingsOpen((current) => !current)}
+            onClick={() => {
+              setIsMenuOpen(false);
+              setIsSettingsOpen((current) => !current);
+            }}
           >
             <span className="filled" />
             <SettingsIcon />
@@ -193,6 +215,21 @@ export function Header() {
               </div>
             </div>
           ) : null}
+        </li>
+        <li className="header-socials__item header-socials__item--menu">
+          <button
+            type="button"
+            className="header-menu-trigger"
+            aria-label={isMenuOpen ? labels.aria.closeMenu : labels.aria.openMenu}
+            aria-controls="site-header-navigation"
+            aria-expanded={isMenuOpen}
+            onClick={() => {
+              setIsSettingsOpen(false);
+              setIsMenuOpen((current) => !current);
+            }}
+          >
+            {isMenuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+          </button>
         </li>
       </ul>
     </header>

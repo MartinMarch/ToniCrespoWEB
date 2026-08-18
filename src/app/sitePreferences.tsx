@@ -4,10 +4,10 @@ export type SiteLanguage = "es" | "en" | "de" | "ca";
 export type SiteTheme = "light" | "dark";
 
 export const languageOptions: ReadonlyArray<{ code: SiteLanguage; label: string; shortLabel: string }> = [
+  { code: "ca", label: "Català", shortLabel: "CA" },
   { code: "es", label: "Español", shortLabel: "ES" },
   { code: "en", label: "English", shortLabel: "EN" },
   { code: "de", label: "Deutsch", shortLabel: "DE" },
-  { code: "ca", label: "Català", shortLabel: "CA" },
 ];
 
 const preferenceStorageKeys = {
@@ -93,6 +93,8 @@ const translations = {
       authorPhotos: "Fotografías de Toni Crespo",
       language: "Cambiar idioma",
       theme: "Cambiar tema",
+      openMenu: "Abrir navegación",
+      closeMenu: "Cerrar navegación",
     },
     footer: {
       location: "Mallorca",
@@ -187,6 +189,8 @@ const translations = {
       authorPhotos: "Photographs of Toni Crespo",
       language: "Change language",
       theme: "Change theme",
+      openMenu: "Open navigation",
+      closeMenu: "Close navigation",
     },
     footer: {
       location: "Mallorca",
@@ -281,6 +285,8 @@ const translations = {
       authorPhotos: "Fotografien von Toni Crespo",
       language: "Sprache ändern",
       theme: "Thema ändern",
+      openMenu: "Navigation öffnen",
+      closeMenu: "Navigation schließen",
     },
     footer: {
       location: "Mallorca",
@@ -375,6 +381,8 @@ const translations = {
       authorPhotos: "Fotografies de Toni Crespo",
       language: "Canviar idioma",
       theme: "Canviar tema",
+      openMenu: "Obrir navegació",
+      closeMenu: "Tancar navegació",
     },
     footer: {
       location: "Mallorca",
@@ -443,10 +451,10 @@ export function useSitePreferences() {
 }
 
 function readStoredLanguage(): SiteLanguage {
-  if (typeof window === "undefined") return "es";
+  if (typeof window === "undefined") return "ca";
 
   const storedLanguage = window.localStorage.getItem(preferenceStorageKeys.language);
-  return isSiteLanguage(storedLanguage) ? storedLanguage : "es";
+  return isSiteLanguage(storedLanguage) ? storedLanguage : "ca";
 }
 
 function readStoredTheme(): SiteTheme {
