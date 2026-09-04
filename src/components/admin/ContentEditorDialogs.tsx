@@ -39,21 +39,22 @@ import {
 
 type BiographyTextDialogProps = {
   html: string;
+  poem: string;
   translations?: PageTranslations;
   onClose: () => void;
-  onSave: (input: { html: string; translations: PageTranslations }) => Promise<void>;
+  onSave: (input: { html: string; poem: string; translations: PageTranslations }) => Promise<void>;
 };
 
-export function BiographyTextDialog({ html, onClose, onSave, translations }: BiographyTextDialogProps) {
+export function BiographyTextDialog({ html, onClose, onSave, poem, translations }: BiographyTextDialogProps) {
   const [activeLocale, setActiveLocale] = useState<EditorLocale>("es");
   const [values, setValues] = useState(() =>
-    createLocaleValues<{ html: string }>(
-      { html },
-      translations as PageTranslations & { en?: { html?: string }; de?: { html?: string }; ca?: { html?: string } },
+    createLocaleValues<{ html: string; poem: string }>(
+      { html, poem },
+      translations as PageTranslations & { en?: { html?: string; poem?: string }; de?: { html?: string; poem?: string }; ca?: { html?: string; poem?: string } },
       getEditorialPageTranslations("biography") as PageTranslations & {
-        en?: { html?: string };
-        de?: { html?: string };
-        ca?: { html?: string };
+        en?: { html?: string; poem?: string };
+        de?: { html?: string; poem?: string };
+        ca?: { html?: string; poem?: string };
       },
     ),
   );
@@ -88,7 +89,7 @@ export function BiographyTextDialog({ html, onClose, onSave, translations }: Bio
       ...values,
       [activeLocale]: { ...values[activeLocale], html: currentHtml },
     };
-    const sanitizedValues = mapLocaleValues(nextValues, (value) => ({ html: sanitizeRichText(value.html) }));
+    const sanitizedValues = mapLocaleValues(nextValues, (value) => ({ html: sanitizeRichText(value.html), poem: value.poem.trim() }));
 
     if (!getRichTextValue(sanitizedValues.es.html)) {
       setError("Completa el texto en español antes de guardar.");
@@ -102,6 +103,7 @@ export function BiographyTextDialog({ html, onClose, onSave, translations }: Bio
     try {
       await onSave({
         html: sanitizedValues.es.html,
+        poem: sanitizedValues.es.poem,
         translations: preservePageTranslationTitles(
           toStoredTranslations(sanitizedValues) as PageTranslations,
           translations,
@@ -146,6 +148,19 @@ export function BiographyTextDialog({ html, onClose, onSave, translations }: Bio
             dangerouslySetInnerHTML={{ __html: values[activeLocale].html }}
             onInput={commitActiveHtml}
           />
+          <label className="biography-poem-editor">
+            Poema al final de la trayectoria
+            <textarea
+              rows={10}
+              value={values[activeLocale].poem}
+              onChange={(event) => setValues((current) => ({
+                ...current,
+                [activeLocale]: { ...current[activeLocale], poem: event.target.value },
+              }))}
+              placeholder="Pega aquí el poema respetando sus saltos de línea"
+            />
+            <small>Se mostrará justificado y en cursiva, justo antes de las fotografías finales.</small>
+          </label>
         </TranslationTabs>
         <FormMessage error={error} />
         <div className="admin-dialog__actions">

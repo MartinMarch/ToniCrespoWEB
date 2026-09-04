@@ -11,13 +11,13 @@ Esta carpeta es la fuente de verdad local para el esquema y las copias operativa
 
 ### Proyecto actual de Toni Crespo
 
-Las dos primeras migraciones ya están aplicadas en el proyecto que contiene el contenido migrado. En el SQL Editor ejecuta ahora, y solo una vez, el contenido completo de:
+Las migraciones de edición contextual ya están aplicadas en el proyecto que contiene el contenido migrado. Para la revisión final, ejecuta ahora, y solo una vez, el contenido completo de:
 
 ```text
-supabase/migrations/20260811110000_contextual_editing.sql
+supabase/migrations/20260904120000_final_site_settings.sql
 ```
 
-Es la migración que añade las columnas `translations` y la función de borrado de obras. Corrige el error de edición contextual que muestra la web.
+Esta migración añade la configuración editable del idioma predeterminado y de los destinos de email, WhatsApp e Instagram. La web conserva valores seguros por defecto mientras no esté aplicada, pero el administrador no podrá guardar esos ajustes.
 
 No vuelvas a ejecutar `20260810210000_admin_editing.sql` ni `20260811100000_site_assets_bucket.sql` sobre este proyecto: sus tablas, buckets y políticas ya existen y el SQL Editor puede devolver errores de políticas duplicadas.
 
@@ -28,6 +28,7 @@ Ejecuta una sola vez los archivos completos, exactamente en este orden:
 1. `supabase/migrations/20260810210000_admin_editing.sql`
 2. `supabase/migrations/20260811100000_site_assets_bucket.sql`
 3. `supabase/migrations/20260811110000_contextual_editing.sql`
+4. `supabase/migrations/20260904120000_final_site_settings.sql`
 
 Después restaura una copia con `npm run restore:supabase -- --latest --write` o carga el contenido desde una copia válida.
 
@@ -41,11 +42,11 @@ Después valida el proyecto:
 npm run verify:supabase -- --require-service
 ```
 
-Este comando no modifica datos. Comprueba las columnas `translations`, la función de borrado de obras, la lectura pública y los cinco buckets requeridos.
+Este comando no modifica datos. Comprueba las columnas `translations`, la configuración global, la función de borrado de obras, la lectura pública y los cinco buckets requeridos.
 
 ## Correo de contacto
 
-No hay SQL que ejecutar para esta funcionalidad. El código vive en `supabase/functions/send-contact-email/index.ts` y se ejecuta de forma segura en Supabase Edge Functions. Usa Resend para el envío, con el destinatario fijado en el secreto `CONTACT_RECIPIENT_EMAIL`; el cliente no puede cambiarlo.
+El código vive en `supabase/functions/send-contact-email/index.ts` y se ejecuta de forma segura en Supabase Edge Functions. Usa Resend para el envío y consulta el destinatario configurado por el administrador en `site_settings`; `CONTACT_RECIPIENT_EMAIL` permanece como fallback seguro.
 
 1. Crea una cuenta en Resend y verifica el dominio que usarás como remitente.
 2. Instala e inicia sesión en Supabase CLI, y enlaza este repositorio al proyecto correcto.

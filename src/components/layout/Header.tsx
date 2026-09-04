@@ -1,114 +1,122 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Mail, Menu, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Mail, Menu, Star, X } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAdminSession } from "../../app/adminSession";
-import { languageOptions, useSitePreferences, type SiteTheme } from "../../app/sitePreferences";
-import { artistContact } from "../../lib/contact";
+import { languageOptions, useSitePreferences, type SiteLanguage } from "../../app/sitePreferences";
+import { getContactLinks } from "../../lib/contact";
+import { getEditableOperationErrorMessage } from "../../services/editableContentService";
+import { updateSiteSettings } from "../../services/siteSettingsService";
 import { useContactDialog } from "../contact/ContactDialogProvider";
 import { ToniCrespoLogo } from "./ToniCrespoLogo";
 
 const HEADER_HIDE_OFFSET = 48;
-const SOCIAL_LINKS = [
-  {
-    href: artistContact.instagramProfileUrl,
-    label: "Instagram",
-    social: "instagram",
-    Icon: InstagramIcon,
-  },
-  {
-    href: artistContact.whatsappUrl,
-    label: "WhatsApp",
-    social: "whatsapp",
-    Icon: WhatsAppIcon,
-  },
-] as const;
 
 export function Header() {
-  const { labels, language, setLanguage, setTheme, theme } = useSitePreferences();
-  const { isAdmin, isEditMode, requestEditing, setEditMode } = useAdminSession();
+  const { isEditMode } = useAdminSession();
+  const { contactSettings, defaultLanguage, labels, language, refreshSiteSettings, setLanguage } = useSitePreferences();
   const { openEmailComposer } = useContactDialog();
+  const contactLinks = getContactLinks(contactSettings);
   const location = useLocation();
   const headerRef = useRef<HTMLElement | null>(null);
   const lastScrollY = useRef(0);
-  const settingsRef = useRef<HTMLLIElement | null>(null);
   const [isHidden, setIsHidden] = useState(false);
+  const [isLanguageOpen, setIsLanguageOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isSavingDefault, setIsSavingDefault] = useState(false);
+  const [defaultLanguageError, setDefaultLanguageError] = useState<string | null>(null);
   const links = [
     { label: labels.nav.work, path: "/obra" },
     { label: labels.nav.photography, path: "/fotografia" },
     { label: labels.nav.news, path: "/noticias" },
     { label: labels.nav.biography, path: "/trayectoria" },
   ];
+  const socials = [
+    { href: contactLinks.instagramProfileUrl, label: "Instagram", social: "instagram", Icon: InstagramIcon },
+    { href: contactLinks.whatsappUrl, label: "WhatsApp", social: "whatsapp", Icon: WhatsAppIcon },
+  ] as const;
 
   useEffect(() => {
     lastScrollY.current = window.scrollY;
+    setIsScrolled(window.scrollY > 8);
 
     function handleScroll() {
       const currentScrollY = window.scrollY;
       const scrollDelta = currentScrollY - lastScrollY.current;
 
-      if (currentScrollY < HEADER_HIDE_OFFSET) {
-        setIsHidden(false);
-      } else if (scrollDelta > 8) {
-        setIsHidden(true);
-      } else if (scrollDelta < -8) {
-        setIsHidden(false);
-      }
+      setIsScrolled(currentScrollY > 8);
+      if (currentScrollY < HEADER_HIDE_OFFSET) setIsHidden(false);
+      else if (scrollDelta > 8) setIsHidden(true);
+      else if (scrollDelta < -8) setIsHidden(false);
 
       lastScrollY.current = currentScrollY;
     }
 
     window.addEventListener("scroll", handleScroll, { passive: true });
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   useEffect(() => {
     lastScrollY.current = window.scrollY;
     setIsHidden(false);
+    setIsLanguageOpen(false);
     setIsMenuOpen(false);
-    setIsSettingsOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
-    if (!isSettingsOpen && !isMenuOpen) return;
+    if (!isLanguageOpen && !isMenuOpen) return;
 
     function handlePointerDown(event: PointerEvent) {
       if (!headerRef.current?.contains(event.target as Node)) {
-        setIsSettingsOpen(false);
+        setIsLanguageOpen(false);
         setIsMenuOpen(false);
       }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setIsSettingsOpen(false);
+        setIsLanguageOpen(false);
         setIsMenuOpen(false);
       }
     }
 
     window.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("keydown", handleKeyDown);
-
     return () => {
       window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isMenuOpen, isSettingsOpen]);
+  }, [isLanguageOpen, isMenuOpen]);
+
+  function selectLanguage(nextLanguage: SiteLanguage) {
+    setLanguage(nextLanguage);
+    setIsLanguageOpen(false);
+  }
+
+  async function selectDefaultLanguage(nextLanguage: SiteLanguage) {
+    setDefaultLanguageError(null);
+    setIsSavingDefault(true);
+    try {
+      await updateSiteSettings({ contact: contactSettings, defaultLanguage: nextLanguage });
+      await refreshSiteSettings();
+    } catch (error) {
+      setDefaultLanguageError(getEditableOperationErrorMessage(error, "No se pudo actualizar el idioma predeterminado."));
+    } finally {
+      setIsSavingDefault(false);
+    }
+  }
 
   return (
     <header
       ref={headerRef}
-      className={`site-header${isHidden && !isMenuOpen && !isSettingsOpen ? " site-header--hidden" : ""}${
-        isMenuOpen ? " site-header--menu-open" : ""
-      }`}
+      className={`site-header${isScrolled ? " site-header--scrolled" : " site-header--top"}${
+        isHidden && !isMenuOpen && !isLanguageOpen ? " site-header--hidden" : ""
+      }${isMenuOpen ? " site-header--menu-open" : ""}`}
     >
       <NavLink to="/" className="brand" aria-label="Toni Crespo inicio">
         <ToniCrespoLogo />
       </NavLink>
+
       <nav className="main-nav" aria-label={labels.aria.mainNav} id="site-header-navigation">
         {links.map((link) => (
           <NavLink
@@ -121,16 +129,22 @@ export function Header() {
           </NavLink>
         ))}
       </nav>
+
       <div className="header-mobile-shortcuts" aria-label={labels.aria.socials}>
-        {SOCIAL_LINKS.map(({ href, label, social, Icon }) => (
+        {socials.map(({ href, label, social, Icon }) => (
           <a key={social} href={href} target="_blank" rel="noreferrer" className="header-mobile-shortcut">
             <Icon />
             <span>{label}</span>
           </a>
         ))}
+        <button type="button" className="header-mobile-shortcut" onClick={() => openEmailComposer()}>
+          <Mail aria-hidden="true" />
+          <span>{labels.contact.viaEmail}</span>
+        </button>
       </div>
+
       <ul className="header-socials" aria-label={labels.aria.socials}>
-        {SOCIAL_LINKS.map(({ href, label, social, Icon }) => (
+        {socials.map(({ href, label, social, Icon }) => (
           <li key={social} className="header-socials__item header-socials__item--social">
             <a href={href} target="_blank" rel="noreferrer" data-social={social} aria-label={label}>
               <span className="filled" />
@@ -151,68 +165,50 @@ export function Header() {
             <Mail aria-hidden="true" />
           </button>
         </li>
-        <li className="header-socials__item header-socials__item--settings header-settings" ref={settingsRef}>
+        <li className="header-socials__item header-language">
           <button
             type="button"
-            className="header-settings__trigger"
-            data-social="settings"
-            aria-label={labels.settings.open}
-            aria-expanded={isSettingsOpen}
-            aria-haspopup="dialog"
+            className="header-language__trigger"
+            aria-label={labels.aria.language}
+            aria-expanded={isLanguageOpen}
+            aria-haspopup="menu"
             onClick={() => {
               setIsMenuOpen(false);
-              setIsSettingsOpen((current) => !current);
+              setIsLanguageOpen((current) => !current);
             }}
           >
-            <span className="filled" />
-            <SettingsIcon />
+            <LanguageFlag language={language} />
+            <ChevronDown aria-hidden="true" />
           </button>
-          {isSettingsOpen ? (
-            <div className="settings-panel" role="dialog" aria-label={labels.settings.title}>
-              <div className="settings-panel__header">
-                <h2>{labels.settings.title}</h2>
-              </div>
-              <PreferenceGroup label={labels.settings.language} ariaLabel={labels.aria.language}>
-                {languageOptions.map((option) => (
+          {isLanguageOpen ? (
+            <div className="language-menu" role="menu" aria-label={labels.aria.language}>
+              {languageOptions.map((option) => (
+                <div className="language-menu__option" role="none" key={option.code}>
                   <button
-                    key={option.code}
                     type="button"
-                    className={`settings-choice${language === option.code ? " is-active" : ""}`}
-                    aria-pressed={language === option.code}
-                    onClick={() => setLanguage(option.code)}
+                    role="menuitemradio"
+                    aria-checked={language === option.code}
+                    className={language === option.code ? "is-active" : undefined}
+                    onClick={() => selectLanguage(option.code)}
                   >
-                    <span>{option.shortLabel}</span>
-                    <strong>{option.label}</strong>
+                    <LanguageFlag language={option.code} />
+                    <span>{option.label}</span>
                   </button>
-                ))}
-              </PreferenceGroup>
-              <PreferenceGroup label={labels.settings.appearance} ariaLabel={labels.aria.theme}>
-                <ThemeChoice
-                  label={labels.settings.light}
-                  mode="light"
-                  selectedTheme={theme}
-                  onSelect={setTheme}
-                />
-                <ThemeChoice label={labels.settings.dark} mode="dark" selectedTheme={theme} onSelect={setTheme} />
-              </PreferenceGroup>
-              <div className="settings-panel__editor">
-                <button
-                  type="button"
-                  className={isEditMode ? "is-active" : undefined}
-                  onClick={() => {
-                    if (isAdmin && isEditMode) {
-                      setEditMode(false);
-                    } else {
-                      requestEditing();
-                    }
-                    setIsSettingsOpen(false);
-                  }}
-                >
-                  <EditorSettingsIcon />
-                  <span>{labels.settings.editor}</span>
-                  <small>{isEditMode ? "Activo" : labels.settings.editorHint}</small>
-                </button>
-              </div>
+                  {isEditMode ? (
+                    <button
+                      type="button"
+                      className={`language-menu__default${defaultLanguage === option.code ? " is-active" : ""}`}
+                      aria-label={`Usar ${option.label} como idioma predeterminado`}
+                      title={defaultLanguage === option.code ? "Idioma predeterminado" : "Establecer como predeterminado"}
+                      disabled={isSavingDefault || defaultLanguage === option.code}
+                      onClick={() => void selectDefaultLanguage(option.code)}
+                    >
+                      <Star aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+              {defaultLanguageError ? <p className="language-menu__error" role="alert">{defaultLanguageError}</p> : null}
             </div>
           ) : null}
         </li>
@@ -224,7 +220,7 @@ export function Header() {
             aria-controls="site-header-navigation"
             aria-expanded={isMenuOpen}
             onClick={() => {
-              setIsSettingsOpen(false);
+              setIsLanguageOpen(false);
               setIsMenuOpen((current) => !current);
             }}
           >
@@ -236,47 +232,18 @@ export function Header() {
   );
 }
 
-function PreferenceGroup({ ariaLabel, children, label }: { ariaLabel: string; children: ReactNode; label: string }) {
-  return (
-    <div className="settings-panel__group">
-      <span className="settings-panel__label">{label}</span>
-      <div className="settings-panel__choices" aria-label={ariaLabel}>
-        {children}
-      </div>
-    </div>
-  );
-}
+export function LanguageFlag({ language }: { language: SiteLanguage }) {
+  const option = languageOptions.find((candidate) => candidate.code === language);
 
-function ThemeChoice({
-  label,
-  mode,
-  onSelect,
-  selectedTheme,
-}: {
-  label: string;
-  mode: SiteTheme;
-  onSelect: (theme: SiteTheme) => void;
-  selectedTheme: SiteTheme;
-}) {
-  return (
-    <button
-      type="button"
-      className={`settings-choice settings-choice--theme${selectedTheme === mode ? " is-active" : ""}`}
-      aria-pressed={selectedTheme === mode}
-      onClick={() => onSelect(mode)}
-    >
-      <span className={`settings-choice__swatch settings-choice__swatch--${mode}`} />
-      <strong>{label}</strong>
-    </button>
+  return option?.flag ? (
+    <span className="language-flag language-flag--emoji" aria-hidden="true">{option.flag}</span>
+  ) : (
+    <span className="language-flag language-flag--ca" aria-hidden="true" />
   );
 }
 
 function isSectionActive(path: string, pathname: string) {
-  if (path === "/obra") {
-    return pathname.startsWith("/obra") || pathname.startsWith("/lienzos") || pathname.startsWith("/laminas");
-  }
-
-  return false;
+  return path === "/obra" && (pathname.startsWith("/obra") || pathname.startsWith("/lienzos") || pathname.startsWith("/laminas"));
 }
 
 function InstagramIcon() {
@@ -289,50 +256,11 @@ function InstagramIcon() {
   );
 }
 
-function SettingsIcon() {
-  return (
-    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-      <path
-        d="M9.4 4.1 10 2.7h4l.6 1.4c.2.5.7.8 1.2 1l1.5-.6 2.8 2.8-.6 1.5c.2.5.5 1 .9 1.2l1.6.6v4l-1.6.6c-.4.2-.7.7-.9 1.2l.6 1.5-2.8 2.8-1.5-.6c-.5.2-1 .5-1.2 1l-.6 1.4h-4l-.6-1.4c-.2-.5-.7-.8-1.2-1l-1.5.6-2.8-2.8.6-1.5c-.2-.5-.5-1-.9-1.2L2 14.6v-4l1.6-.6c.4-.2.7-.7.9-1.2l-.6-1.5 2.8-2.8 1.5.6c.5-.2 1-.5 1.2-1Z"
-        fill="none"
-        stroke="currentColor"
-        strokeLinejoin="round"
-        strokeWidth="1.55"
-      />
-      <circle cx="12" cy="12.6" r="3.1" fill="none" stroke="currentColor" strokeWidth="1.55" />
-    </svg>
-  );
-}
-
-function EditorSettingsIcon() {
-  return (
-    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-      <path d="M4 19.5h16" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
-      <path
-        d="m13.8 5.2 3 3L9.5 15.5l-3.4.7.7-3.4 7-7Z"
-        fill="none"
-        stroke="currentColor"
-        strokeLinejoin="round"
-        strokeWidth="1.7"
-      />
-    </svg>
-  );
-}
-
 function WhatsAppIcon() {
   return (
     <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-      <path
-        d="M5.2 19.4l1.1-3.4a7.5 7.5 0 1 1 3 2.8l-4.1.6Z"
-        fill="none"
-        stroke="currentColor"
-        strokeLinejoin="round"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M9.2 8.7c.2-.4.4-.5.8-.5h.5c.2 0 .4.1.5.4l.7 1.7c.1.3.1.5-.1.7l-.5.6c.6 1.1 1.5 2 2.7 2.6l.7-.5c.2-.2.5-.2.8-.1l1.6.7c.3.1.4.3.4.6v.4c0 .5-.2.8-.6 1a3.2 3.2 0 0 1-1.7.4c-3.1 0-6.9-3.4-6.9-6.8 0-.5.2-.9.5-1.2Z"
-        fill="currentColor"
-      />
+      <path d="M20 11.7a8 8 0 0 1-11.8 7L4 20l1.3-4.1A8 8 0 1 1 20 11.7Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+      <path d="M8.2 7.8c.2-.4.4-.4.7-.4h.4c.2 0 .4.1.5.4l.8 1.8c.1.3.1.5-.1.7l-.6.7c-.2.2-.2.4-.1.6.5 1 1.3 1.8 2.3 2.4.2.1.4.1.6-.1l.8-1c.2-.2.4-.3.7-.2l1.9.9c.3.1.4.3.4.6 0 .3-.2 1.3-.8 1.8-.6.5-1.4.8-2.3.6-1.1-.2-2.5-.8-4.1-2.2-1.3-1.2-2.2-2.6-2.5-3.7-.3-1-.1-2 .4-2.6l.4-.4Z" fill="currentColor" />
     </svg>
   );
 }

@@ -33,6 +33,7 @@ export function BiographyPage() {
       html: next.page?.html ?? "",
       mainImageUrl: next.mainImageUrl,
       mainImageAlt: next.mainImageAlt,
+      poem: next.poem,
       galleryImages: next.galleryImages,
       translations: next.page?.translations,
     };
@@ -95,10 +96,11 @@ export function BiographyPage() {
     }
   }
 
-  async function handleSaveText(input: { html: string; translations: NonNullable<typeof editableBiography.page>["translations"] }) {
+  async function handleSaveText(input: { html: string; poem: string; translations: NonNullable<typeof editableBiography.page>["translations"] }) {
     await upsertBiography({
       ...getBiographyInput(),
       html: input.html,
+      poem: input.poem,
       translations: input.translations,
     });
     await refreshContent();
@@ -174,6 +176,8 @@ export function BiographyPage() {
               ) : null}
             </div>
 
+            {biography.poem ? <blockquote className="biography-poem">{biography.poem}</blockquote> : null}
+
             <div className="biography-portraits" aria-label={labels.aria.authorPhotos}>
               {biography.galleryImages.map((image, index) => (
                 <figure
@@ -226,6 +230,7 @@ export function BiographyPage() {
       {isTextEditorOpen && editableBiography.page ? (
         <BiographyTextDialog
           html={editableBiography.page.html}
+          poem={editableBiography.poem}
           translations={editableBiography.page.translations}
           onClose={() => setIsTextEditorOpen(false)}
           onSave={handleSaveText}

@@ -12,6 +12,7 @@ import type { CurrentArtwork, CurrentPage } from "../types/currentSite";
 import type { NewsItem } from "../types/domain";
 import type { SupportKind } from "../types/support";
 import { useSitePreferences } from "./sitePreferences";
+import { useAdminSession } from "./adminSession";
 
 type EditableContentContextValue = EditableContentSnapshot & {
   error: string | null;
@@ -27,6 +28,7 @@ const EditableContentContext = createContext<EditableContentContextValue | null>
 
 export function EditableContentProvider({ children }: { children: ReactNode }) {
   const { language } = useSitePreferences();
+  const { isEditMode } = useAdminSession();
   const [snapshot, setSnapshot] = useState<EditableContentSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +55,8 @@ export function EditableContentProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => {
     const source = snapshot ?? emptySnapshot;
-    const currentSnapshot = translateEditorialContent(source, language);
+    const translatedSnapshot = translateEditorialContent(source, language);
+    const currentSnapshot = isEditMode ? translatedSnapshot : hideUnpublishedContent(translatedSnapshot);
 
     return {
       ...currentSnapshot,
@@ -97,9 +100,28 @@ export function EditableContentProvider({ children }: { children: ReactNode }) {
         );
       },
     };
-  }, [emptySnapshot, error, isLoading, language, refreshContent, snapshot]);
+  }, [emptySnapshot, error, isEditMode, isLoading, language, refreshContent, snapshot]);
 
   return <EditableContentContext.Provider value={value}>{children}</EditableContentContext.Provider>;
+}
+
+function hideUnpublishedContent(snapshot: EditableContentSnapshot): EditableContentSnapshot {
+  return {
+    ...snapshot,
+    collections: snapshot.collections
+      .filter((collection) => collection.isPublished)
+      .map((collection) => {
+        const artworks = collection.artworks.filter((artwork) => artwork.isPublished);
+        return {
+          ...collection,
+          artworks,
+          coverImageUrl: artworks[0]?.imageUrl ?? null,
+        };
+      }),
+    newsItems: snapshot.newsItems.filter((item) => item.isPublished),
+    pages: snapshot.pages.filter((page) => page.isPublished),
+    photoItems: snapshot.photoItems.filter((item) => item.isPublished),
+  };
 }
 
 function normalizeSupportText(value: string) {

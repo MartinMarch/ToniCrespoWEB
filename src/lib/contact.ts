@@ -1,10 +1,14 @@
-export const artistContact = {
-  email: "tonicrespo.art@gmail.com",
-  instagramDirectUrl: "https://ig.me/m/tonicrespo.art",
-  instagramProfileUrl: "https://www.instagram.com/tonicrespo.art/",
-  whatsappUrl: "https://wa.me/34659959352",
-} as const;
+import type { SiteContactSettings } from "../types/siteSettings";
 
-export function getWhatsAppContactUrl(message: string) {
-  return `${artistContact.whatsappUrl}?text=${encodeURIComponent(message)}`;
+export function getContactLinks(contact: SiteContactSettings) {
+  return {
+    instagramDirectUrl: `https://ig.me/m/${contact.instagramUsername}`,
+    instagramProfileUrl: `https://www.instagram.com/${contact.instagramUsername}/`,
+    telephoneUrl: `tel:+${contact.phoneNumber}`,
+    whatsappUrl: `https://wa.me/${contact.phoneNumber}`,
+  };
+}
+
+export function getWhatsAppContactUrl(contact: SiteContactSettings, message: string) {
+  return `${getContactLinks(contact).whatsappUrl}?text=${encodeURIComponent(message)}`;
 }

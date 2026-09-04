@@ -9,7 +9,7 @@ import { ConfirmDialog } from "../components/admin/AdminUi";
 import { BreadcrumbTrail } from "../components/navigation/BreadcrumbTrail";
 import { PageLoader } from "../components/ui/Loaders";
 import type { SupportKind } from "../types/support";
-import { deleteArtwork, getEditableOperationErrorMessage } from "../services/editableContentService";
+import { deleteArtwork, getEditableOperationErrorMessage, updateArtworkVisibility } from "../services/editableContentService";
 import type { CurrentArtwork } from "../types/currentSite";
 
 type SupportCollectionDetailPageProps = {
@@ -38,6 +38,7 @@ export function SupportCollectionDetailPage({ kind }: SupportCollectionDetailPag
   const [artworkToEditId, setArtworkToEditId] = useState<string | null>(null);
   const [artworkToDelete, setArtworkToDelete] = useState<CurrentArtwork | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [visibilityUpdateId, setVisibilityUpdateId] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
 
   if (isLoading) {
@@ -83,6 +84,19 @@ export function SupportCollectionDetailPage({ kind }: SupportCollectionDetailPag
     }
   }
 
+  async function handleToggleArtworkVisibility(artwork: CurrentArtwork) {
+    setOperationError(null);
+    setVisibilityUpdateId(artwork.id);
+    try {
+      await updateArtworkVisibility({ id: artwork.id, isPublished: !artwork.isPublished });
+      await refreshContent();
+    } catch (error) {
+      setOperationError(getEditableOperationErrorMessage(error, "No se pudo cambiar la visibilidad de la obra."));
+    } finally {
+      setVisibilityUpdateId(null);
+    }
+  }
+
   return (
     <>
       <section className={`page-section support-detail-page${isEditMode ? " is-editing" : ""}`}>
@@ -103,6 +117,9 @@ export function SupportCollectionDetailPage({ kind }: SupportCollectionDetailPag
           onAdd={() => setIsArtworkEditorOpen(true)}
           onEdit={(artwork) => setArtworkToEditId(artwork.id)}
           onDelete={setArtworkToDelete}
+          onToggleVisibility={(artwork) => {
+            if (!visibilityUpdateId) void handleToggleArtworkVisibility(artwork);
+          }}
           supportKind={kind}
         />
       </section>

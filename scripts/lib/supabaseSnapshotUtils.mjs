@@ -11,6 +11,7 @@ export const SNAPSHOT_VERSION = 1;
 
 export const CONTENT_TABLES = Object.freeze([
   { name: "site_pages", conflict: "id" },
+  { name: "site_settings", conflict: "key", order: "key" },
   { name: "collections", conflict: "id" },
   { name: "artworks", conflict: "id" },
   { name: "photography_items", conflict: "id" },
@@ -19,7 +20,9 @@ export const CONTENT_TABLES = Object.freeze([
   { name: "admin_users", conflict: "email" },
 ]);
 
-export const EDITABLE_TABLES = Object.freeze(CONTENT_TABLES.filter((table) => table.name !== "admin_users"));
+export const EDITABLE_TABLES = Object.freeze(
+  CONTENT_TABLES.filter((table) => table.name !== "admin_users" && table.name !== "site_settings"),
+);
 export const REQUIRED_SITE_BUCKETS = Object.freeze(["artworks", "photography", "news", "biography", "site-assets"]);
 
 export function readProjectEnv() {
@@ -171,7 +174,9 @@ export async function fetchAllRows(client, table, pageSize = 1000) {
 
   while (true) {
     let query = client.from(table).select("*").range(offset, offset + pageSize - 1);
-    query = table === "admin_users" ? query.order("email", { ascending: true }) : query.order("id", { ascending: true });
+    const tableDefinition = CONTENT_TABLES.find((candidate) => candidate.name === table);
+    const orderColumn = tableDefinition?.order ?? (table === "admin_users" ? "email" : "id");
+    query = query.order(orderColumn, { ascending: true });
 
     const { data, error } = await query;
     if (error) throw new Error(`No se pudo leer ${table}: ${error.message}`);

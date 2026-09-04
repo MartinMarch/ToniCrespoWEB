@@ -36,6 +36,7 @@ export type BiographyContent = {
   page: CurrentPage | null;
   mainImageUrl: string;
   mainImageAlt: string;
+  poem: string;
   galleryImages: BiographyGalleryImage[];
 };
 
@@ -145,6 +146,10 @@ export function getEditableOperationErrorMessage(
     return "La base de datos no tiene aplicada la migración de edición contextual. Ejecuta 20260811110000_contextual_editing.sql en el SQL Editor de Supabase y vuelve a intentarlo.";
   }
 
+  if (/site_settings.*schema cache|schema cache.*site_settings|relation .*site_settings.*does not exist/i.test(message)) {
+    return "Falta la migración de configuración final. Ejecuta 20260904120000_final_site_settings.sql en Supabase y vuelve a intentarlo.";
+  }
+
   if (/row-level security|permission denied|not authorized|insufficient privileges/i.test(message)) {
     return "Tu sesión no tiene permisos de edición. Cierra sesión, vuelve a entrar con el usuario administrador y comprueba la tabla admin_users en Supabase.";
   }
@@ -197,6 +202,7 @@ export async function upsertBiography(input: {
   html: string;
   mainImageUrl: string;
   mainImageAlt: string;
+  poem: string;
   galleryImages: BiographyGalleryImage[];
   translations?: PageTranslations;
 }) {
@@ -213,6 +219,7 @@ export async function upsertBiography(input: {
         content: {
           mainImageUrl: input.mainImageUrl,
           mainImageAlt: input.mainImageAlt,
+          poem: input.poem,
           galleryImages: input.galleryImages,
         },
         translations: input.translations ?? {},
@@ -398,6 +405,23 @@ export async function updateArtwork(input: {
 
   if (error) throw error;
   if (!data) throw new Error("No se encontró la obra que querías actualizar.");
+}
+
+export async function updateArtworkVisibility(input: { id: string; isPublished: boolean }) {
+  assertSupabase();
+
+  const { data, error } = await supabase!
+    .from("artworks")
+    .update({
+      is_published: input.isPublished,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new Error("No se encontró la obra que querías mostrar u ocultar.");
 }
 
 export async function createPhotographyItem(input: {
@@ -660,6 +684,7 @@ function getEmptyBiographyContent(): BiographyContent {
     page: null,
     mainImageUrl: "",
     mainImageAlt: "",
+    poem: "",
     galleryImages: [],
   };
 }
@@ -704,6 +729,7 @@ function mapBiographyPage(row: SitePageRow): BiographyContent {
     },
     mainImageUrl: typeof content.mainImageUrl === "string" ? content.mainImageUrl : "",
     mainImageAlt: typeof content.mainImageAlt === "string" ? content.mainImageAlt : "",
+    poem: typeof content.poem === "string" ? content.poem : "",
     galleryImages,
   };
 }

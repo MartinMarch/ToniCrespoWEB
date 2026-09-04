@@ -33,7 +33,20 @@ async function main() {
   }
 
   for (const table of CONTENT_TABLES.filter((candidate) => candidate.name !== "admin_users")) {
-    const { count, error } = await publicClient.from(table.name).select("id", { count: "exact", head: true });
+    if (table.name === "site_settings") {
+      const { data, error } = await publicClient.from(table.name).select("key").eq("key", "global").maybeSingle();
+      if (error || !data) {
+        failures.push(
+          `Falta la configuración global en site_settings. Ejecuta supabase/migrations/20260904120000_final_site_settings.sql.${error ? ` Detalle: ${error.message}` : ""}`,
+        );
+      } else {
+        console.log("  ok configuración global site_settings");
+      }
+      continue;
+    }
+
+    const identityColumn = table.name === "site_settings" ? "key" : "id";
+    const { count, error } = await publicClient.from(table.name).select(identityColumn, { count: "exact", head: true });
     if (error) {
       failures.push(`No se puede leer ${table.name} con la anon key: ${error.message}`);
       continue;
@@ -113,7 +126,7 @@ async function main() {
 async function findLocalMediaReferences(client) {
   const references = [];
 
-  for (const table of CONTENT_TABLES.filter((candidate) => candidate.name !== "admin_users")) {
+  for (const table of CONTENT_TABLES.filter((candidate) => candidate.name !== "admin_users" && candidate.name !== "site_settings")) {
     const rows = await fetchAllRows(client, table.name);
 
     for (const row of rows) {

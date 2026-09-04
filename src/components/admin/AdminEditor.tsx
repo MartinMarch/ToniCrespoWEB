@@ -1,8 +1,7 @@
 import { useState, type FormEvent } from "react";
-import { EyeOff, LogOut, PencilLine, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useAdminSession } from "../../app/adminSession";
 import { useEditableContent } from "../../app/editableContent";
-import { EditIconButton } from "./AdminUi";
 
 export function AdminEditor() {
   const admin = useAdminSession();
@@ -11,7 +10,6 @@ export function AdminEditor() {
   return (
     <>
       {admin.isLoginOpen ? <AdminLoginModal /> : null}
-      {admin.isAdmin && admin.isEditMode ? <EditingStatus /> : null}
       {content.error ? <div className="admin-toast" role="status">{content.error}</div> : null}
     </>
   );
@@ -63,23 +61,6 @@ function AdminLoginModal() {
           </button>
         </form>
       </div>
-    </div>
-  );
-}
-
-function EditingStatus() {
-  const { setEditMode, signOut } = useAdminSession();
-
-  return (
-    <div className="editing-status" role="status">
-      <PencilLine aria-hidden="true" />
-      <span>Modo edición</span>
-      <EditIconButton label="Ocultar controles de edición" tone="light" onClick={() => setEditMode(false)}>
-        <EyeOff aria-hidden="true" />
-      </EditIconButton>
-      <EditIconButton label="Cerrar sesión" tone="light" onClick={() => void signOut()}>
-        <LogOut aria-hidden="true" />
-      </EditIconButton>
     </div>
   );
 }

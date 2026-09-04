@@ -9,7 +9,7 @@ import {
   type UIEvent,
   type WheelEvent,
 } from "react";
-import { ImagePlus, Pencil, Trash2 } from "lucide-react";
+import { Eye, EyeOff, ImagePlus, Pencil, Trash2 } from "lucide-react";
 import { useContactDialog } from "../contact/ContactDialogProvider";
 import { useSitePreferences, type SiteLabels } from "../../app/sitePreferences";
 import { getSupabasePublicStorageUrl } from "../../lib/supabaseClient";
@@ -17,6 +17,7 @@ import type { SupportKind } from "../../types/support";
 import { EditIconButton } from "../admin/AdminUi";
 import { LoadingImage } from "../ui/Loaders";
 import type { CurrentArtwork } from "../../types/currentSite";
+import { ArtworkDimensions } from "./ArtworkDimensions";
 
 type ArtworkShowcaseListProps = {
   artworks: CurrentArtwork[];
@@ -24,6 +25,7 @@ type ArtworkShowcaseListProps = {
   onAdd?: () => void;
   onDelete?: (artwork: CurrentArtwork) => void;
   onEdit?: (artwork: CurrentArtwork) => void;
+  onToggleVisibility?: (artwork: CurrentArtwork) => void;
   supportKind?: SupportKind;
 };
 
@@ -131,7 +133,7 @@ const roomMockups: readonly RoomMockupTemplate[] = [
   },
 ] as const;
 
-export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDelete, onEdit, supportKind }: ArtworkShowcaseListProps) {
+export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDelete, onEdit, onToggleVisibility, supportKind }: ArtworkShowcaseListProps) {
   const { labels } = useSitePreferences();
   const [activeArtwork, setActiveArtwork] = useState<CurrentArtwork | null>(null);
   const [activeMockupArtwork, setActiveMockupArtwork] = useState<CurrentArtwork | null>(null);
@@ -277,6 +279,7 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
             isEditing={isEditing}
             onEdit={onEdit}
             onDelete={onDelete}
+            onToggleVisibility={onToggleVisibility}
             onImageSelect={openArtwork}
             onMockupsSelect={openMockups}
           />
@@ -303,7 +306,7 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
           <div className="artwork-lightbox__caption">
             <h2>{activeArtwork.title}</h2>
             {activeArtwork.technique ? <p>{activeArtwork.technique}</p> : null}
-            {activeArtwork.dimensions ? <p>{activeArtwork.dimensions}</p> : null}
+            {activeArtwork.dimensions ? <ArtworkDimensions value={activeArtwork.dimensions} /> : null}
           </div>
         </div>
       ) : null}
@@ -420,6 +423,7 @@ function ArtworkShowcase({
   labels,
   onEdit,
   onDelete,
+  onToggleVisibility,
   onImageSelect,
   onMockupsSelect,
 }: {
@@ -428,6 +432,7 @@ function ArtworkShowcase({
   labels: SiteLabels;
   onEdit?: (artwork: CurrentArtwork) => void;
   onDelete?: (artwork: CurrentArtwork) => void;
+  onToggleVisibility?: (artwork: CurrentArtwork) => void;
   onImageSelect: (artwork: CurrentArtwork) => void;
   onMockupsSelect: (artwork: CurrentArtwork) => void;
 }) {
@@ -437,8 +442,9 @@ function ArtworkShowcase({
     !artwork.technique && !artwork.dimensions && caption && caption.toLowerCase() !== artwork.title.toLowerCase();
 
   return (
-    <article className="artwork-showcase" id={artwork.slug}>
-      <figure className="artwork-showcase__figure editor-media-target">
+    <article className={`artwork-showcase${!artwork.isPublished ? " is-unpublished" : ""}`} id={artwork.slug}>
+      <div className="artwork-showcase__content" style={getArtworkPresentationStyle(artwork)}>
+        <figure className="artwork-showcase__figure editor-media-target">
         <button
           type="button"
           className="artwork-showcase__zoom-button"
@@ -447,7 +453,7 @@ function ArtworkShowcase({
         >
           <LoadingImage src={artwork.imageUrl} alt={artwork.title} loading="lazy" />
         </button>
-        {isEditing && (onEdit || onDelete) ? (
+        {isEditing && (onEdit || onDelete || onToggleVisibility) ? (
           <>
             {onEdit ? (
               <EditIconButton
@@ -468,13 +474,23 @@ function ArtworkShowcase({
                 <Trash2 aria-hidden="true" />
               </EditIconButton>
             ) : null}
+            {onToggleVisibility ? (
+              <EditIconButton
+                className="editor-media-target__action editor-media-target__action--visibility"
+                label={artwork.isPublished ? `Ocultar obra: ${artwork.title}` : `Mostrar obra: ${artwork.title}`}
+                onClick={() => onToggleVisibility(artwork)}
+              >
+                {artwork.isPublished ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
+              </EditIconButton>
+            ) : null}
           </>
         ) : null}
-      </figure>
-      <div className="artwork-showcase__meta">
+        </figure>
+        <div className="artwork-showcase__meta">
+        {!artwork.isPublished ? <span className="artwork-showcase__visibility-label">Oculta al público</span> : null}
         <h2>{artwork.title}</h2>
         {artwork.technique ? <p>{artwork.technique}</p> : null}
-        {artwork.dimensions ? <p>{artwork.dimensions}</p> : null}
+        {artwork.dimensions ? <ArtworkDimensions value={artwork.dimensions} /> : null}
         {shouldShowCaption ? <p>{caption}</p> : null}
         <div className="artwork-showcase__actions">
           <button
@@ -494,9 +510,22 @@ function ArtworkShowcase({
             {labels.actions.interest}
           </button>
         </div>
+        </div>
       </div>
     </article>
   );
+}
+
+function getArtworkPresentationStyle(artwork: CurrentArtwork): CSSProperties {
+  const ratio = artwork.width && artwork.height
+    ? artwork.width / artwork.height
+    : getArtworkMetrics(artwork).ratio;
+
+  return {
+    "--artwork-aspect-ratio": `${clamp(ratio, 0.25, 4)}`,
+    "--artwork-display-width": `${Math.min(129, 66 * ratio)}svh`,
+    "--artwork-display-width-mobile": `${Math.min(86, 48 * ratio)}svh`,
+  } as CSSProperties;
 }
 
 function RoomMockup({
@@ -587,24 +616,34 @@ function getMockupStyle(artwork: CurrentArtwork, template: RoomMockupTemplate): 
     "--mockup-artwork-y": `${placement.y}%`,
     "--mockup-card-ratio": template.cardRatio,
     "--mockup-card-width-factor": `${getCardRatio(template.cardRatio)}`,
+    "--mockup-artwork-brightness": `${getArtworkBrightness(template.tone)}`,
   } as CSSProperties;
+}
+
+function getArtworkBrightness(tone: RoomMockupTemplate["tone"]) {
+  if (tone === "dark") return 0.68;
+  if (tone === "warm") return 0.8;
+  if (tone === "cool") return 0.86;
+  return 0.88;
 }
 
 function getArtworkMetrics(artwork: CurrentArtwork) {
   const physicalDimensions = parsePhysicalDimensions(artwork.dimensions || artwork.description || artwork.caption);
-  const pixelRatio = artwork.width && artwork.height ? artwork.width / artwork.height : 1;
+  const pixelRatio = artwork.width && artwork.height ? artwork.width / artwork.height : null;
   const physicalRatio = physicalDimensions ? physicalDimensions.width / physicalDimensions.height : null;
   const reversedPhysicalRatio = physicalDimensions ? physicalDimensions.height / physicalDimensions.width : null;
   const shouldUseReversedPhysicalRatio =
     physicalRatio &&
     reversedPhysicalRatio &&
+    pixelRatio &&
     getRatioScore(reversedPhysicalRatio, pixelRatio) < getRatioScore(physicalRatio, pixelRatio);
-  const dimensions = physicalDimensions
+  const orientedDimensions = physicalDimensions
     ? shouldUseReversedPhysicalRatio
       ? { width: physicalDimensions.height, height: physicalDimensions.width }
       : physicalDimensions
     : null;
-  const ratio = dimensions ? dimensions.width / dimensions.height : pixelRatio;
+  const ratio = pixelRatio ?? (orientedDimensions ? orientedDimensions.width / orientedDimensions.height : 1);
+  const dimensions = orientedDimensions ? fitPhysicalSizeToImageRatio(orientedDimensions, ratio) : null;
 
   return {
     ratio,
@@ -612,6 +651,14 @@ function getArtworkMetrics(artwork: CurrentArtwork) {
     heightCm: dimensions?.height ?? null,
     longestCm: dimensions ? Math.max(dimensions.width, dimensions.height) : null,
   };
+}
+
+function fitPhysicalSizeToImageRatio(dimensions: { width: number; height: number }, imageRatio: number) {
+  const longestCm = Math.max(dimensions.width, dimensions.height);
+
+  return imageRatio >= 1
+    ? { width: longestCm, height: longestCm / imageRatio }
+    : { width: longestCm * imageRatio, height: longestCm };
 }
 
 function parsePhysicalDimensions(value: string | null) {

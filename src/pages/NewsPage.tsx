@@ -10,12 +10,15 @@ import { deleteNewsItem, getEditableOperationErrorMessage } from "../services/ed
 import type { NewsImage, NewsItem } from "../types/domain";
 
 export function NewsPage() {
-  const { labels } = useSitePreferences();
+  const { labels, language } = useSitePreferences();
   const { isEditMode } = useAdminSession();
   const { isLoading, refreshContent } = useEditableContent();
   const newsItems = useEditableNewsItems();
   const editableNewsItems = useEditingContent().newsItems;
   const [searchTerm, setSearchTerm] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [category, setCategory] = useState<NewsItem["category"] | "all">("all");
   const [activeImage, setActiveImage] = useState<NewsImage | null>(null);
   const [isNewsEditorOpen, setIsNewsEditorOpen] = useState(false);
   const [newsToEditId, setNewsToEditId] = useState<string | null>(null);
@@ -24,10 +27,15 @@ export function NewsPage() {
   const [operationError, setOperationError] = useState<string | null>(null);
   const normalizedSearch = useMemo(() => normalizeSearch(searchTerm), [searchTerm]);
   const filteredNews = useMemo(() => {
-    if (!normalizedSearch) return newsItems;
-
-    return newsItems.filter((item) => normalizeSearch(getSearchableNewsText(item)).includes(normalizedSearch));
-  }, [newsItems, normalizedSearch]);
+    return newsItems.filter((item) => {
+      const matchesSearch = !normalizedSearch || normalizeSearch(getSearchableNewsText(item)).includes(normalizedSearch);
+      const matchesCategory = category === "all" || item.category === category;
+      const matchesFrom = !fromDate || Boolean(item.publishedAt && item.publishedAt >= fromDate);
+      const matchesTo = !toDate || Boolean(item.publishedAt && item.publishedAt <= toDate);
+      return matchesSearch && matchesCategory && matchesFrom && matchesTo;
+    });
+  }, [category, fromDate, newsItems, normalizedSearch, toDate]);
+  const hasActiveFilters = Boolean(searchTerm || fromDate || toDate || category !== "all");
 
   useEffect(() => {
     if (!activeImage) return;
@@ -78,19 +86,51 @@ export function NewsPage() {
         </div>
         {operationError ? <p className="editor-operation-feedback" role="alert">{operationError}</p> : null}
 
-        <div className="news-search" role="search">
-          <svg className="news-search__icon" aria-hidden="true" viewBox="0 0 24 24">
-            <g>
-              <path d="M21.53 20.47l-3.66-3.66C19.2 15.24 20 13.21 20 11c0-4.97-4.03-9-9-9s-9 4.03-9 9 4.03 9 9 9c2.22 0 4.24-.8 5.81-2.13l3.66 3.66a.75.75 0 0 0 1.06-1.06ZM3.5 11c0-4.14 3.37-7.5 7.5-7.5s7.5 3.36 7.5 7.5-3.37 7.5-7.5 7.5-7.5-3.36-7.5-7.5Z" />
-            </g>
-          </svg>
-          <input
-            className="news-search__input"
-            placeholder={labels.actions.search}
-            type="search"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
+        <div className="news-filters" role="search">
+          <label className="news-search">
+            <span className="editor-visually-hidden">{labels.actions.search}</span>
+            <svg className="news-search__icon" aria-hidden="true" viewBox="0 0 24 24">
+              <g>
+                <path d="M21.53 20.47l-3.66-3.66C19.2 15.24 20 13.21 20 11c0-4.97-4.03-9-9-9s-9 4.03-9 9 4.03 9 9 9c2.22 0 4.24-.8 5.81-2.13l3.66 3.66a.75.75 0 0 0 1.06-1.06ZM3.5 11c0-4.14 3.37-7.5 7.5-7.5s7.5 3.36 7.5 7.5-3.37 7.5-7.5 7.5-7.5-3.36-7.5-7.5Z" />
+              </g>
+            </svg>
+            <input
+              className="news-search__input"
+              placeholder={labels.actions.search}
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </label>
+          <label className="news-filter-field">
+            <span>{labels.newsFilters.from}</span>
+            <input type="date" value={fromDate} max={toDate || undefined} onChange={(event) => setFromDate(event.target.value)} />
+          </label>
+          <label className="news-filter-field">
+            <span>{labels.newsFilters.to}</span>
+            <input type="date" value={toDate} min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} />
+          </label>
+          <label className="news-filter-field news-filter-field--category">
+            <span>{labels.newsFilters.category}</span>
+            <select value={category} onChange={(event) => setCategory(event.target.value as NewsItem["category"] | "all")}>
+              <option value="all">{labels.newsFilters.allCategories}</option>
+              {newsCategoryValues.map((value) => <option key={value} value={value}>{getCategoryLabel(value, language)}</option>)}
+            </select>
+          </label>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className="news-filters__clear"
+              onClick={() => {
+                setSearchTerm("");
+                setFromDate("");
+                setToDate("");
+                setCategory("all");
+              }}
+            >
+              {labels.newsFilters.clear}
+            </button>
+          ) : null}
         </div>
 
         {isEditMode ? (
@@ -145,6 +185,19 @@ export function NewsPage() {
       ) : null}
     </>
   );
+}
+
+const newsCategoryValues: NewsItem["category"][] = ["exposicion", "premio", "entrevista", "publicacion", "evento", "television"];
+
+const categoryLabels: Record<string, Record<NewsItem["category"], string>> = {
+  es: { exposicion: "Exposición", premio: "Premio", entrevista: "Entrevista", publicacion: "Publicación", evento: "Evento", television: "Televisión" },
+  ca: { exposicion: "Exposició", premio: "Premi", entrevista: "Entrevista", publicacion: "Publicació", evento: "Esdeveniment", television: "Televisió" },
+  en: { exposicion: "Exhibition", premio: "Award", entrevista: "Interview", publicacion: "Publication", evento: "Event", television: "Television" },
+  de: { exposicion: "Ausstellung", premio: "Auszeichnung", entrevista: "Interview", publicacion: "Publikation", evento: "Veranstaltung", television: "Fernsehen" },
+};
+
+function getCategoryLabel(category: NewsItem["category"], language: string) {
+  return categoryLabels[language]?.[category] ?? categoryLabels.es[category];
 }
 
 function NewsCard({

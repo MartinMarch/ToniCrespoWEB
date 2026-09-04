@@ -1,10 +1,10 @@
 # Estado actual del proyecto
 
-Actualizado: 2026-08-11.
+Actualizado: 2026-09-04.
 
 ## Objetivo vigente
 
-Reconstruir la web de Toni Crespo como una aplicación React actual, visualmente orientada a un portfolio de artista, manteniendo el contenido e imágenes de la web pública como base. La página de entrada presenta dos recorridos: `Lienzos` y `Láminas`.
+Reconstruir la web de Toni Crespo como una aplicación React actual, visualmente orientada a un portfolio de artista, manteniendo el contenido e imágenes de la web pública como base. La página de entrada presenta dos recorridos cuadrados: `Lienzos` y `Obra en papel`.
 
 La aplicación local debe arrancar con:
 
@@ -20,7 +20,7 @@ npm run lint
 npm run build
 ```
 
-El último `lint` y `build` se completaron correctamente. Vite requiere Node `20.19+` o `22.12+` para iniciar el servidor de desarrollo; con el entorno actual `18.19.1` el build termina, pero `npm run dev` no arranca.
+El último `lint` y `build` se completaron correctamente con Node `20.20.2`; `npm run dev` también arranca correctamente.
 
 ## Stack y fuentes de datos
 
@@ -37,7 +37,7 @@ No existen ya `media-images/`, el XML de WordPress, los datasets/mock locales ni
 
 | Ruta | Estado | Contenido |
 | --- | --- | --- |
-| `/` | Activa | Entrada con Lienzos, Láminas y texto de presentación. |
+| `/` | Activa | Entrada con Lienzos, Obra en papel y texto de presentación. |
 | `/obra` | Activa | Entrada a los dos soportes. |
 | `/lienzos` | Activa | Colecciones con obras cuyo soporte contiene `lienzo`. |
 | `/lienzos/:collectionSlug` | Activa | Obras de una colección de lienzos. |
@@ -55,32 +55,34 @@ La página de contacto se eliminó de la navegación y de las rutas principales:
 ### Navegación y estructura
 
 - Logo SVG de Toni Crespo en header y footer: `src/assets/toni_crespo_logo_vector.svg`.
-- Header blanco, sticky y con animación de ocultación al bajar y reaparecer al subir.
+- Header transparente al inicio, sticky y dividido en logo, navegación y acciones.
 - Navegación: Obra, Fotografía, Noticias y Trayectoria.
 - Enlaces de Instagram y WhatsApp en el lado derecho del header con hover de relleno de color, sin etiquetas flotantes.
 - Botón azul de correo junto a Instagram y WhatsApp. Abre un formulario que envía mediante una Supabase Edge Function; en cada obra, el botón de interés abre un selector de WhatsApp, Instagram DM o correo con el mensaje de la obra preparado.
-- Botón circular de Ajustes junto a Instagram y WhatsApp, con panel desplegable para idioma, tema claro/oscuro y acceso de edición web.
+- Selector de idioma con banderas junto a las redes; se han eliminado el botón de Ajustes y el tema oscuro.
 - Idiomas disponibles: español, inglés, alemán y catalán. La interfaz y los textos editoriales de Inicio, Trayectoria y Noticias se traducen al cambiar idioma. Los textos creados en modo edición se almacenan por idioma en Supabase; las versiones heredadas siguen usando el diccionario del frontend mientras no se editen.
-- Modo claro actual conservado y modo oscuro añadido con fondo negro/gris, superficies oscuras y persistencia local de preferencia.
+- Fondo único con gradiente desde el gris crema anterior hasta un gris más oscuro.
 - Modo edición conectado a Supabase: login con usuario creado en Supabase Auth, permiso validado contra `admin_users` y acciones contextuales. En Trayectoria hay cambio de portada, editor visual multilingüe y gestión de galería; Noticias permite alta y borrado; Fotografía permite alta directa y borrado; Lienzos/Láminas permiten crear, editar y borrar colecciones, además de añadir o borrar obras dentro de ellas.
 - Loaders añadidos para carga inicial de contenido y carga de imágenes en tarjetas, galerías, obra, noticias, fotografía, trayectoria y ambientes.
-- Footer con marca, navegación secundaria, email, teléfono, Instagram y copyright.
+- Footer sin navegación secundaria, con marca, contacto, copyright y acceso discreto al modo edición.
+- El idioma inicial y los destinos de email, WhatsApp e Instagram se configuran en edición y se guardan en `site_settings`.
 - Fondo global desde blanco hasta gris crema, sin barra de scroll visible.
 
 ### Inicio y obra
 
-- Inicio con dos accesos grandes y responsivos: `Lienzos` y `Láminas`.
+- Inicio con dos accesos cuadrados, iguales y responsivos: `Lienzos` y `Obra en papel`.
 - En escritorio se muestran en dos columnas; en móvil se apilan.
 - El hover amplía sutilmente las imágenes de ambos accesos.
 - La vista de soporte muestra primero sus colecciones y cada colección usa breadcrumb para volver a Obra o al soporte correspondiente.
-- En el detalle de cada obra se muestra imagen, título, técnica, dimensiones, contacto por WhatsApp y acceso a Ambientes.
+- En el detalle de cada obra se muestra la información alineada con su borde izquierdo, dimensiones intercambiables entre centímetros y pulgadas, contacto y acceso a Ambientes.
+- El administrador puede ocultar o volver a publicar una obra mediante el icono de ojo sin borrarla.
 - La imagen de una obra se abre a pantalla completa y, en escritorio, dispone de lupa rectangular controlada por el puntero.
 
 ### Fotografía, noticias y trayectoria
 
 - Fotografía: título centrado, imágenes en una sola columna y pantalla completa de imagen al seleccionarla.
-- Noticias: tarjetas horizontales apiladas, búsqueda local, galería de imágenes cuando existe más de una y enlace `Visitar aquí` cuando la noticia lo incluye.
-- Trayectoria: título, foto principal `autor2.jpg`, texto sincronizado y las fotos secundarias `autor1.jpg` y `autor3.jpg` debajo.
+- Noticias: tarjetas horizontales apiladas, búsqueda y filtros por fechas y categoría, galería de imágenes y enlace externo.
+- Trayectoria: foto principal, texto sincronizado, poema editable en cursiva y justificado, y galería final.
 
 ## Datos disponibles
 
@@ -96,7 +98,7 @@ La clasificación de lienzos y láminas está explicada en [lienzos-laminas.md](
 
 ## Ambientes de obra
 
-El modal de Ambientes se ha sustituido por un sistema dinámico: cada obra se sitúa sobre una pared vacía según su proporción y dimensiones, no dentro de un marco fijo predefinido. Hay tres escenas compatibles para cada intervalo de tamaño, para no mostrar una lámina de 30 cm en una escena pensada para un díptico grande. El modal mantiene navegación con flechas, teclado, scroll horizontal y paginación.
+El modal de Ambientes usa un sistema dinámico: cada obra se sitúa sobre una pared vacía según su proporción y dimensiones. Hay tres escenas compatibles para cada intervalo de tamaño y una corrección de brillo, saturación y contraste ajustada al tono del fondo. El modal mantiene navegación con flechas, teclado, scroll horizontal y paginación.
 
 Fondos activos:
 
@@ -113,10 +115,10 @@ Importante: la escala actual está calibrada de forma interna por centímetros v
 ## Pendientes reales
 
 1. Validar editorialmente nombres, técnicas y dimensiones extraídas de las galerías antiguas.
-2. Ejecutar `supabase/migrations/20260811110000_contextual_editing.sql` en el proyecto remoto antes de usar las nuevas acciones de edición.
+2. Ejecutar `supabase/migrations/20260904120000_final_site_settings.sql` en el proyecto remoto antes de guardar la configuración global.
 3. Crear externamente el usuario Auth admin e insertar su email en `admin_users`.
 4. Decidir si se mantienen las rutas legacy a largo plazo.
-5. Confirmar el nombre comercial de `Láminas` frente a `Obra sobre papel`.
+5. Desplegar de nuevo `send-contact-email` para que use el destinatario editable.
 6. Decidir si MONOCROMÍAS debe mantener el estado sin imágenes o recuperar obra heredada.
 7. Si se requiere realismo de escala en Ambientes, crear escenas calibradas con medidas conocidas.
 8. Validar editorialmente los formularios de edición con Toni antes de permitir edición destructiva o borrados.

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Mail, MessageCircle, Send } from "lucide-react";
 import { useSitePreferences, type SiteLabels } from "../../app/sitePreferences";
-import { artistContact, getWhatsAppContactUrl } from "../../lib/contact";
+import { getContactLinks, getWhatsAppContactUrl } from "../../lib/contact";
 import { sendContactEmail, type ContactEmailArtwork } from "../../services/contactEmailService";
 import type { CurrentArtwork } from "../../types/currentSite";
 import { AdminDialog, FormMessage } from "../admin/AdminUi";
@@ -78,9 +78,10 @@ function ArtworkContactDialog({
   onClose: () => void;
   onEmail: () => void;
 }) {
-  const { labels } = useSitePreferences();
+  const { contactSettings, labels } = useSitePreferences();
   const [wasInstagramMessageCopied, setWasInstagramMessageCopied] = useState(false);
   const draft = createArtworkEmailDraft(artwork, labels);
+  const contactLinks = getContactLinks(contactSettings);
 
   async function handleInstagramClick() {
     setWasInstagramMessageCopied(await copyText(draft.message ?? ""));
@@ -92,7 +93,7 @@ function ArtworkContactDialog({
         <div className="contact-channel-grid">
           <a
             className="contact-channel contact-channel--whatsapp"
-            href={getWhatsAppContactUrl(draft.message ?? "")}
+            href={getWhatsAppContactUrl(contactSettings, draft.message ?? "")}
             target="_blank"
             rel="noreferrer"
           >
@@ -101,7 +102,7 @@ function ArtworkContactDialog({
           </a>
           <a
             className="contact-channel contact-channel--instagram"
-            href={artistContact.instagramDirectUrl}
+            href={contactLinks.instagramDirectUrl}
             target="_blank"
             rel="noreferrer"
             onClick={() => void handleInstagramClick()}

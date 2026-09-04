@@ -76,21 +76,10 @@ async function captureDesktop(page) {
   await page.waitForContent();
   await page.capture("desktop-01-inicio.png", "Inicio - pantalla de escritorio");
 
-  await page.click(".header-settings__trigger");
-  await page.waitForSelector(".settings-panel");
-  await page.capture("desktop-02-ajustes.png", "Ajustes de idioma, apariencia y edición - escritorio");
-
-  await page.click(".settings-choice--theme:not(.is-active)");
-  await page.wait(250);
-  await page.click(".header-settings__trigger");
-  await page.wait(150);
-  await page.capture("desktop-03-modo-oscuro.png", "Inicio en modo oscuro - escritorio");
-
-  await page.click(".header-settings__trigger");
-  await page.waitForSelector(".settings-panel");
-  await page.click(".settings-choice--theme:not(.is-active)");
-  await page.wait(150);
-  await page.click(".header-settings__trigger");
+  await page.click(".header-language__trigger");
+  await page.waitForSelector(".language-menu");
+  await page.capture("desktop-02-idiomas.png", "Selector de idioma con banderas - escritorio");
+  await page.click(".header-language__trigger");
   await page.wait(150);
 
   await page.click(".header-contact-trigger");
@@ -98,9 +87,7 @@ async function captureDesktop(page) {
   await page.capture("desktop-04-formulario-correo.png", "Formulario de correo - escritorio");
   await page.closeDialog();
 
-  await page.click(".header-settings__trigger");
-  await page.waitForSelector(".settings-panel");
-  await page.click(".settings-panel__editor button");
+  await page.click(".site-footer__editor-actions button:last-child");
   await page.waitForSelector(".admin-login");
   await page.capture("desktop-05-acceso-edicion.png", "Acceso protegido al modo de edición - escritorio");
   await page.closeDialog();
@@ -170,30 +157,28 @@ async function captureMobile(page) {
   await page.waitForContent();
   await page.capture("mobile-01-inicio.png", "Inicio - pantalla móvil");
 
-  await page.click(".header-settings__trigger");
-  await page.waitForSelector(".settings-panel");
-  await page.capture("mobile-02-ajustes.png", "Ajustes de idioma y apariencia - móvil");
+  await page.click(".header-language__trigger");
+  await page.waitForSelector(".language-menu");
+  await page.capture("mobile-02-idiomas.png", "Selector de idioma con banderas - móvil");
 
   if (await page.clickButtonByText("English")) {
     await page.wait(300);
-    await page.click(".header-settings__trigger");
-    await page.wait(100);
     await page.capture("mobile-03-inicio-ingles.png", "Inicio traducido al inglés - móvil");
-    await page.click(".header-settings__trigger");
-    await page.waitForSelector(".settings-panel");
+    await page.click(".header-language__trigger");
+    await page.waitForSelector(".language-menu");
     await page.clickButtonByText("Español");
   }
-  await page.click(".header-settings__trigger");
   await page.wait(150);
 
-  await page.click(".header-contact-trigger");
+  await page.click(".header-menu-trigger");
+  await page.waitForSelector(".header-mobile-shortcuts");
+  await page.click(".header-mobile-shortcut:last-child");
   await page.waitForSelector(".contact-dialog");
   await page.capture("mobile-04-formulario-correo.png", "Formulario de correo - móvil");
   await page.closeDialog();
+  await page.click(".header-menu-trigger");
 
-  await page.click(".header-settings__trigger");
-  await page.waitForSelector(".settings-panel");
-  await page.click(".settings-panel__editor button");
+  await page.click(".site-footer__editor-actions button:last-child");
   await page.waitForSelector(".admin-login");
   await page.capture("mobile-11-acceso-edicion.png", "Acceso protegido al modo de edición - móvil");
   await page.closeDialog();
@@ -257,7 +242,7 @@ async function captureEditingDesktop(page) {
 
   await page.go("/trayectoria");
   await page.waitForContent();
-  await page.waitForSelector(".editing-status");
+  await page.waitForSelector(".biography-page.is-editing");
   await page.hover(".biography-portrait--main");
   await page.capture("desktop-17-edicion-trayectoria.png", "Controles de edición de portada y trayectoria - escritorio");
 
@@ -456,9 +441,7 @@ async function signInToEditor(page, credentials) {
   await page.setViewport(desktop);
   await page.open("/");
   await page.waitForContent();
-  await page.click(".header-settings__trigger");
-  await page.waitForSelector(".settings-panel");
-  await page.click(".settings-panel__editor button");
+  await page.click(".site-footer__editor-actions button:last-child");
   await page.waitForSelector(".admin-login");
   await page.fill(".admin-login input[type=\"email\"]", credentials.email);
   await page.fill(".admin-login input[type=\"password\"]", credentials.password);
@@ -468,7 +451,7 @@ async function signInToEditor(page, credentials) {
   while (Date.now() < deadline) {
     const status = await page.evaluate(`(() => ({
       error: document.querySelector(".admin-login .admin-form__message--error")?.textContent?.trim() ?? null,
-      ready: Boolean(document.querySelector(".editing-status")),
+      ready: Boolean(document.querySelector(".site-footer__editor-actions")?.textContent?.includes("Salir de edición")),
     }))()`);
     if (status.ready) return;
     if (status.error) throw new Error(`No se pudo iniciar la sesión de edición: ${status.error}`);

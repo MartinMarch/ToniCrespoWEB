@@ -50,7 +50,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 Para activar la edición web:
 
-1. En el proyecto Supabase actual, ejecutar `supabase/migrations/20260811110000_contextual_editing.sql` en el SQL Editor si todavía no se ha aplicado. Para un proyecto vacío, el orden completo está documentado en [supabase/README.md](supabase/README.md).
+1. En el proyecto Supabase actual, ejecutar `supabase/migrations/20260904120000_final_site_settings.sql` en el SQL Editor. Para un proyecto vacío, el orden completo está documentado en [supabase/README.md](supabase/README.md).
 2. Crear externamente en Supabase Auth el usuario admin y asignarle una contraseña desde Supabase.
 3. Insertar ese mismo email en `admin_users`.
 4. Crear `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
@@ -61,20 +61,20 @@ Comprobar la conexión, el esquema y los buckets sin cambiar datos:
 npm run verify:supabase -- --require-service
 ```
 
-El botón de Ajustes del header abre el acceso a edición. Supabase es obligatorio tanto para el contenido público como para el modo de edición.
+El acceso discreto a edición está en el footer. El header mantiene únicamente redes, correo y el selector de idioma con banderas. En modo edición, ese selector también permite marcar el idioma inicial de nuevos visitantes.
 
 ## Correo de contacto
 
-El botón azul de correo del header y el contacto de cada obra usan la Edge Function `send-contact-email`. El navegador nunca recibe una clave SMTP o de Resend: la función mantiene el destinatario Toni Crespo y responde al email que introduzca el visitante.
+El botón azul de correo del header y el contacto de cada obra usan la Edge Function `send-contact-email`. El navegador nunca recibe una clave SMTP o de Resend: la función obtiene de Supabase el destinatario elegido por el administrador y responde al email que introduzca el visitante.
 
 Antes de usarla en producción, crea una cuenta de [Resend](https://resend.com/), verifica el dominio remitente y despliega la función siguiendo [supabase/README.md](supabase/README.md). No se requiere una migración SQL adicional.
 
 El modo edición queda integrado en cada vista:
 
-- `Trayectoria`: cambio de foto de portada, editor visual de texto y alta/baja de fotos de galería.
+- `Trayectoria`: cambio de foto de portada, editor visual de texto y poema, y alta/baja de fotos de galería.
 - `Noticias`: formulario modal de alta y borrado confirmado de cada noticia.
 - `Fotografía`: carga directa de una o varias imágenes y borrado confirmado.
-- `Lienzos` y `Láminas`: alta, edición y borrado confirmado de colección desde el listado; alta y borrado de obra desde su detalle.
+- `Lienzos` y `Obra en papel`: alta, edición y borrado confirmado de colección desde el listado; alta, ocultación pública y borrado de obra desde su detalle.
 
 Los formularios guardan las versiones en español, inglés, alemán y catalán en las columnas `translations` de Supabase. La versión española es la fuente editorial; los demás idiomas se pueden completar o editar más tarde. Las imágenes subidas se guardan en los buckets existentes, y los activos nuevos eliminados se limpian de Storage. Los recursos heredados bajo `legacy/` nunca se borran automáticamente.
 

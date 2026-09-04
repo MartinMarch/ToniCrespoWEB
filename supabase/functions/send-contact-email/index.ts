@@ -1,4 +1,4 @@
-const recipientEmail = Deno.env.get("CONTACT_RECIPIENT_EMAIL") ?? "tonicrespo.art@gmail.com";
+const fallbackRecipientEmail = Deno.env.get("CONTACT_RECIPIENT_EMAIL") ?? "tonicrespo.art@gmail.com";
 const resendApiKey = Deno.env.get("RESEND_API_KEY");
 const senderEmail = Deno.env.get("CONTACT_FROM_EMAIL");
 const allowedOrigins = (Deno.env.get("CONTACT_ALLOWED_ORIGINS") ?? "")
@@ -57,6 +57,7 @@ Deno.serve(async (request) => {
     return json({ error: validation.error }, 400, corsHeaders);
   }
 
+  const recipientEmail = await getConfiguredRecipientEmail();
   const response = await fetch("https://api.resend.com/emails", {
     body: JSON.stringify({
       from: senderEmail,
@@ -79,6 +80,30 @@ Deno.serve(async (request) => {
 
   return json({ ok: true }, 200, corsHeaders);
 });
+
+async function getConfiguredRecipientEmail() {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) return fallbackRecipientEmail;
+
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/site_settings?key=eq.global&select=value`, {
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+    });
+    if (!response.ok) return fallbackRecipientEmail;
+
+    const rows = await response.json() as Array<{ value?: { contact?: { email?: unknown } } }>;
+    const configuredEmail = rows[0]?.value?.contact?.email;
+    return typeof configuredEmail === "string" && isEmail(configuredEmail.trim())
+      ? configuredEmail.trim()
+      : fallbackRecipientEmail;
+  } catch {
+    return fallbackRecipientEmail;
+  }
+}
 
 async function readPayload(request: Request): Promise<ContactPayload | null> {
   try {

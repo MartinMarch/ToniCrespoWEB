@@ -6,6 +6,7 @@ export type LocalizedFields<T extends object> = Partial<Record<ContentLocale, Pa
 
 export type PageTranslations = LocalizedFields<{
   html: string;
+  poem: string;
   title: string;
 }>;
 

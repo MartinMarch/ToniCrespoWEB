@@ -527,6 +527,7 @@ function translateBiography(
   return {
     ...biography,
     page: biography.page ? translatePage(biography.page, translation, language) : null,
+    poem: biography.page?.translations?.[language]?.poem ?? biography.poem,
     galleryImages: biography.galleryImages.map((image) => {
       const localized = image.translations?.[language];
       return {

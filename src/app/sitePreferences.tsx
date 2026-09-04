@@ -1,18 +1,20 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { loadSiteSettings } from "../services/siteSettingsService";
+import { defaultSiteSettings, type SiteContactSettings } from "../types/siteSettings";
 
 export type SiteLanguage = "es" | "en" | "de" | "ca";
-export type SiteTheme = "light" | "dark";
+export type MeasurementUnit = "cm" | "in";
 
-export const languageOptions: ReadonlyArray<{ code: SiteLanguage; label: string; shortLabel: string }> = [
-  { code: "ca", label: "Català", shortLabel: "CA" },
-  { code: "es", label: "Español", shortLabel: "ES" },
-  { code: "en", label: "English", shortLabel: "EN" },
-  { code: "de", label: "Deutsch", shortLabel: "DE" },
+export const languageOptions: ReadonlyArray<{ code: SiteLanguage; flag: string | null; label: string; shortLabel: string }> = [
+  { code: "ca", flag: null, label: "Català", shortLabel: "CA" },
+  { code: "es", flag: "🇪🇸", label: "Español", shortLabel: "ES" },
+  { code: "en", flag: "🇬🇧", label: "English", shortLabel: "EN" },
+  { code: "de", flag: "🇩🇪", label: "Deutsch", shortLabel: "DE" },
 ];
 
 const preferenceStorageKeys = {
   language: "toni-crespo-language",
-  theme: "toni-crespo-theme",
+  measurementUnit: "toni-crespo-measurement-unit",
 } as const;
 
 const translations = {
@@ -26,7 +28,7 @@ const translations = {
     },
     support: {
       canvas: "Lienzos",
-      paper: "Láminas",
+      paper: "Obra en papel",
     },
     settings: {
       open: "Abrir ajustes",
@@ -79,6 +81,17 @@ const translations = {
       search: "Buscar",
       noNews: "No hay noticias que coincidan con la búsqueda.",
       visit: "Visitar aquí",
+      dimensionsCentimeters: "Medidas en centímetros",
+      dimensionsInches: "Medidas en pulgadas",
+      showCentimeters: "Mostrar en centímetros",
+      showInches: "Mostrar en pulgadas",
+    },
+    newsFilters: {
+      allCategories: "Todas las categorías",
+      category: "Categoría",
+      clear: "Limpiar filtros",
+      from: "Desde",
+      to: "Hasta",
     },
     status: {
       notFoundPage: "Pagina no encontrada",
@@ -98,7 +111,7 @@ const translations = {
     },
     footer: {
       location: "Mallorca",
-      baseline: "Obra original y láminas",
+      baseline: "Obra original y obra en papel",
     },
     rooms: {
       livingRoom: "Salón",
@@ -122,7 +135,7 @@ const translations = {
     },
     support: {
       canvas: "Canvases",
-      paper: "Prints",
+      paper: "Works on paper",
     },
     settings: {
       open: "Open settings",
@@ -175,6 +188,17 @@ const translations = {
       search: "Search",
       noNews: "No news items match your search.",
       visit: "Visit here",
+      dimensionsCentimeters: "Dimensions in centimetres",
+      dimensionsInches: "Dimensions in inches",
+      showCentimeters: "Show in centimetres",
+      showInches: "Show in inches",
+    },
+    newsFilters: {
+      allCategories: "All categories",
+      category: "Category",
+      clear: "Clear filters",
+      from: "From",
+      to: "To",
     },
     status: {
       notFoundPage: "Page not found",
@@ -194,7 +218,7 @@ const translations = {
     },
     footer: {
       location: "Mallorca",
-      baseline: "Original artwork and prints",
+      baseline: "Original works and works on paper",
     },
     rooms: {
       livingRoom: "Living room",
@@ -218,7 +242,7 @@ const translations = {
     },
     support: {
       canvas: "Leinwände",
-      paper: "Drucke",
+      paper: "Arbeiten auf Papier",
     },
     settings: {
       open: "Einstellungen öffnen",
@@ -271,6 +295,17 @@ const translations = {
       search: "Suchen",
       noNews: "Keine Neuigkeiten entsprechen der Suche.",
       visit: "Hier besuchen",
+      dimensionsCentimeters: "Maße in Zentimetern",
+      dimensionsInches: "Maße in Zoll",
+      showCentimeters: "In Zentimetern anzeigen",
+      showInches: "In Zoll anzeigen",
+    },
+    newsFilters: {
+      allCategories: "Alle Kategorien",
+      category: "Kategorie",
+      clear: "Filter löschen",
+      from: "Von",
+      to: "Bis",
     },
     status: {
       notFoundPage: "Seite nicht gefunden",
@@ -290,7 +325,7 @@ const translations = {
     },
     footer: {
       location: "Mallorca",
-      baseline: "Originalwerke und Drucke",
+      baseline: "Originalwerke und Arbeiten auf Papier",
     },
     rooms: {
       livingRoom: "Wohnzimmer",
@@ -314,7 +349,7 @@ const translations = {
     },
     support: {
       canvas: "Llenços",
-      paper: "Làmines",
+      paper: "Obra en paper",
     },
     settings: {
       open: "Obrir ajustos",
@@ -367,6 +402,17 @@ const translations = {
       search: "Cercar",
       noNews: "No hi ha notícies que coincideixin amb la cerca.",
       visit: "Visitar aquí",
+      dimensionsCentimeters: "Mides en centímetres",
+      dimensionsInches: "Mides en polzades",
+      showCentimeters: "Mostrar en centímetres",
+      showInches: "Mostrar en polzades",
+    },
+    newsFilters: {
+      allCategories: "Totes les categories",
+      category: "Categoria",
+      clear: "Netejar filtres",
+      from: "Des de",
+      to: "Fins a",
     },
     status: {
       notFoundPage: "Pàgina no trobada",
@@ -386,7 +432,7 @@ const translations = {
     },
     footer: {
       location: "Mallorca",
-      baseline: "Obra original i làmines",
+      baseline: "Obra original i obra en paper",
     },
     rooms: {
       livingRoom: "Saló",
@@ -405,36 +451,65 @@ const translations = {
 export type SiteLabels = (typeof translations)[SiteLanguage];
 
 type SitePreferencesContextValue = {
+  contactSettings: SiteContactSettings;
+  defaultLanguage: SiteLanguage;
   language: SiteLanguage;
   labels: SiteLabels;
+  measurementUnit: MeasurementUnit;
+  refreshSiteSettings: () => Promise<void>;
   setLanguage: (language: SiteLanguage) => void;
-  setTheme: (theme: SiteTheme) => void;
-  theme: SiteTheme;
+  setMeasurementUnit: (unit: MeasurementUnit) => void;
 };
 
 const SitePreferencesContext = createContext<SitePreferencesContextValue | null>(null);
 
 export function SitePreferencesProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<SiteLanguage>(() => readStoredLanguage());
-  const [theme, setTheme] = useState<SiteTheme>(() => readStoredTheme());
+  const hadStoredLanguage = useRef(readStoredLanguage() !== null);
+  const didApplyDefaultLanguage = useRef(false);
+  const [language, setLanguage] = useState<SiteLanguage>(() => readStoredLanguage() ?? defaultSiteSettings.defaultLanguage);
+  const [measurementUnit, setMeasurementUnit] = useState<MeasurementUnit>(() => readStoredMeasurementUnit());
+  const [siteSettings, setSiteSettings] = useState(defaultSiteSettings);
+  const [areSiteSettingsLoaded, setAreSiteSettingsLoaded] = useState(false);
   const labels = translations[language];
 
+  const refreshSiteSettings = useCallback(async () => {
+    const nextSettings = await loadSiteSettings();
+    setSiteSettings(nextSettings);
+    setAreSiteSettingsLoaded(true);
+
+    if (!hadStoredLanguage.current && !didApplyDefaultLanguage.current) {
+      didApplyDefaultLanguage.current = true;
+      setLanguage(nextSettings.defaultLanguage);
+    }
+  }, []);
+
   useEffect(() => {
+    void refreshSiteSettings();
+  }, [refreshSiteSettings]);
+
+  useEffect(() => {
+    if (!areSiteSettingsLoaded) return;
     document.documentElement.lang = language;
-    document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.theme = "light";
     window.localStorage.setItem(preferenceStorageKeys.language, language);
-    window.localStorage.setItem(preferenceStorageKeys.theme, theme);
-  }, [language, theme]);
+  }, [areSiteSettingsLoaded, language]);
+
+  useEffect(() => {
+    window.localStorage.setItem(preferenceStorageKeys.measurementUnit, measurementUnit);
+  }, [measurementUnit]);
 
   const value = useMemo(
     () => ({
+      contactSettings: siteSettings.contact,
+      defaultLanguage: siteSettings.defaultLanguage,
       language,
       labels,
+      measurementUnit,
+      refreshSiteSettings,
       setLanguage,
-      setTheme,
-      theme,
+      setMeasurementUnit,
     }),
-    [labels, language, theme],
+    [labels, language, measurementUnit, refreshSiteSettings, siteSettings],
   );
 
   return <SitePreferencesContext.Provider value={value}>{children}</SitePreferencesContext.Provider>;
@@ -450,18 +525,17 @@ export function useSitePreferences() {
   return context;
 }
 
-function readStoredLanguage(): SiteLanguage {
-  if (typeof window === "undefined") return "ca";
+function readStoredLanguage(): SiteLanguage | null {
+  if (typeof window === "undefined") return null;
 
   const storedLanguage = window.localStorage.getItem(preferenceStorageKeys.language);
-  return isSiteLanguage(storedLanguage) ? storedLanguage : "ca";
+  return isSiteLanguage(storedLanguage) ? storedLanguage : null;
 }
 
-function readStoredTheme(): SiteTheme {
-  if (typeof window === "undefined") return "light";
+function readStoredMeasurementUnit(): MeasurementUnit {
+  if (typeof window === "undefined") return "cm";
 
-  const storedTheme = window.localStorage.getItem(preferenceStorageKeys.theme);
-  return storedTheme === "dark" || storedTheme === "light" ? storedTheme : "light";
+  return window.localStorage.getItem(preferenceStorageKeys.measurementUnit) === "in" ? "in" : "cm";
 }
 
 function isSiteLanguage(value: string | null): value is SiteLanguage {
