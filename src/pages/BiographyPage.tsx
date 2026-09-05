@@ -179,12 +179,10 @@ export function BiographyPage() {
             {biography.poem ? <blockquote className="biography-poem">{biography.poem}</blockquote> : null}
 
             <div className="biography-portraits" aria-label={labels.aria.authorPhotos}>
-              {biography.galleryImages.map((image, index) => (
+              {biography.galleryImages.map((image) => (
                 <figure
                   key={image.url}
-                  className={`biography-portrait editor-media-target ${
-                    index % 2 === 0 ? "biography-portrait--horizontal" : "biography-portrait--vertical"
-                  }`}
+                  className="biography-portrait biography-portrait--secondary editor-media-target"
                 >
                   <LoadingImage src={image.url} alt={image.alt} loading="eager" />
                   {isEditMode ? (

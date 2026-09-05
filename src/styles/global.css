@@ -1330,9 +1330,10 @@ main {
 .biography-portraits {
   display: grid;
   gap: clamp(16px, 2vw, 28px);
-  grid-template-columns: minmax(0, 1.28fr) minmax(220px, 0.72fr);
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
   margin: 0 auto;
-  max-width: 960px;
+  max-width: 560px;
   min-width: 0;
   width: 100%;
 }
@@ -1356,10 +1357,16 @@ main {
 }
 
 .biography-portrait--main {
-  aspect-ratio: 800 / 533;
+  aspect-ratio: 1080 / 1481;
   margin-left: auto;
   margin-right: auto;
-  max-width: 760px;
+  max-width: 620px;
+  width: 100%;
+}
+
+.biography-portrait--secondary {
+  aspect-ratio: 1526 / 1874;
+  max-width: 460px;
   width: 100%;
 }
 
@@ -1394,6 +1401,10 @@ main {
 .biography-content p {
   margin-bottom: 18px;
   overflow-wrap: anywhere;
+}
+
+.biography-content .biography-poem-intro {
+  margin-top: clamp(36px, 5vw, 64px);
 }
 
 .photo-lightbox {
@@ -3614,7 +3625,7 @@ main {
   }
 
   .biography-portraits {
-    grid-template-columns: minmax(0, 1fr) minmax(180px, 0.72fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .site-footer__inner {
@@ -3732,6 +3743,7 @@ main {
   }
 
   .biography-portrait--main,
+  .biography-portrait--secondary,
   .biography-portrait--vertical,
   .biography-portrait--horizontal {
     grid-column: auto;
@@ -3943,7 +3955,7 @@ main {
   }
 
   .biography-portrait--main {
-    aspect-ratio: 4 / 5;
+    aspect-ratio: 1080 / 1481;
   }
 
   .photography-gallery {
@@ -4082,7 +4094,7 @@ main {
   }
 
   .biography-portrait--main {
-    aspect-ratio: 3 / 4;
+    aspect-ratio: 1080 / 1481;
     max-width: 300px;
   }
 
@@ -4099,6 +4111,7 @@ main {
   }
 
   .biography-portrait--main,
+  .biography-portrait--secondary,
   .biography-portrait--vertical,
   .biography-portrait--horizontal {
     grid-row: auto;

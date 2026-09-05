@@ -53,15 +53,7 @@ const biographyTranslations = {
 <p>He is currently experimenting with new materials and continues to deepen the expressive resources of collage.</p>
 <p>Often inspired by his readings, Toni Crespo invites the viewer to decipher the hidden meanings between image and poetry, creating an artistic space in continuous transformation and in search of new creative horizons.</p>
 <p>His work is exhibited in different cities.</p>
-<p>&nbsp;</p>
-<p>&nbsp;</p>
-
-
-<p class="has-large-font-size"></p>
-
-
-
-<p></p>`,
+<p class="biography-poem-intro">To close this journey, painting also finds an echo in words. <em>On Painting</em>, by Martin March, accompanies this reflection on the creative process and the enduring power of images.</p>`,
   de: `<h4>&nbsp;</h4>
 <p>&nbsp;Toni Crespo ist ein mallorquinischer Künstler und Gewinner des Kunstpreises "Artistas de Mallorca 2024".</p>
 <p>Er absolvierte sein Kunststudium an der Universität Barcelona.</p>
@@ -73,15 +65,7 @@ const biographyTranslations = {
 <p>Derzeit experimentiert er mit neuen Materialien und vertieft weiterhin die Ausdrucksmöglichkeiten der Collagetechnik.</p>
 <p>Oft von seinen Lektüren inspiriert, lädt Toni Crespo den Betrachter ein, die verborgenen Bedeutungen zwischen Bild und Poesie zu entschlüsseln und schafft einen künstlerischen Raum in ständiger Veränderung und auf der Suche nach neuen kreativen Horizonten.</p>
 <p>Seine Arbeit wird in verschiedenen Städten ausgestellt.</p>
-<p>&nbsp;</p>
-<p>&nbsp;</p>
-
-
-<p class="has-large-font-size"></p>
-
-
-
-<p></p>`,
+<p class="biography-poem-intro">Zum Abschluss dieses Weges findet die Malerei auch in der Sprache ein Echo. <em>Über die Malerei</em> von Martin March begleitet diese Betrachtung des kreativen Prozesses und der Beständigkeit der Bilder.</p>`,
   ca: `<h4>&nbsp;</h4>
 <p>&nbsp;Toni Crespo és un artista mallorquí, guanyador del premi d'art "Artistas de Mallorca 2024".</p>
 <p>Va completar els seus estudis d'Art a la Universitat de Barcelona.</p>
@@ -93,15 +77,7 @@ const biographyTranslations = {
 <p>Actualment, experimenta amb nous materials i continua aprofundint en els recursos expressius de la tècnica del collage.</p>
 <p>Inspirat sovint per les seves lectures, Toni Crespo convida l'espectador a desxifrar els significats ocults entre la imatge i la poesia, creant un espai artístic en transformació contínua i en recerca de nous horitzons creatius.</p>
 <p>El seu treball s'exhibeix en diferents ciutats.</p>
-<p>&nbsp;</p>
-<p>&nbsp;</p>
-
-
-<p class="has-large-font-size"></p>
-
-
-
-<p></p>`,
+<p class="biography-poem-intro">Com a tancament d'aquesta trajectòria, la pintura també troba un eco en la paraula. <em>Sobre la pintura</em>, de Martin March, acompanya aquesta mirada al procés creatiu i a la permanència de les imatges.</p>`,
 } satisfies Record<Exclude<SiteLanguage, "es">, string>;
 
 const translations: Record<Exclude<SiteLanguage, "es">, EditorialLanguageTranslations> = {
