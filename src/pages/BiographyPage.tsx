@@ -176,7 +176,11 @@ export function BiographyPage() {
               ) : null}
             </div>
 
-            {biography.poem ? <blockquote className="biography-poem">{biography.poem}</blockquote> : null}
+            {biography.poem ? (
+              <blockquote className="biography-poem">
+                <em>{biography.poem}</em>
+              </blockquote>
+            ) : null}
 
             <div className="biography-portraits" aria-label={labels.aria.authorPhotos}>
               {biography.galleryImages.map((image) => (

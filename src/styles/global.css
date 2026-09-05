@@ -1365,7 +1365,7 @@ main {
 }
 
 .biography-portrait--secondary {
-  aspect-ratio: 1526 / 1874;
+  aspect-ratio: 1023 / 1250;
   max-width: 460px;
   width: 100%;
 }
@@ -4369,6 +4369,7 @@ p {
 
 .biography-poem {
   color: #292824;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: clamp(16px, 1.15vw, 19px);
   font-style: italic;
   line-height: 1.78;
@@ -4379,6 +4380,10 @@ p {
   text-align: justify;
   white-space: pre-line;
   width: 100%;
+}
+
+.biography-poem em {
+  font-style: italic;
 }
 
 .biography-poem-editor {
