@@ -4710,6 +4710,10 @@ p {
     min-height: 0;
   }
 
+  .home-statement-section {
+    padding-inline: clamp(30px, 8vw, 48px);
+  }
+
   .home-statement-section .wp-content,
   .home-statement-section .wp-content h4 {
     text-align: justify !important;
