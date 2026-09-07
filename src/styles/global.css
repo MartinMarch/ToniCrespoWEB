@@ -928,6 +928,18 @@ main {
   text-align: center !important;
 }
 
+.home-statement-section .wp-content h4:first-child {
+  font-style: italic;
+}
+
+.home-statement-section .wp-content h4:first-child::before {
+  content: "“";
+}
+
+.home-statement-section .wp-content h4:first-child::after {
+  content: "”";
+}
+
 .home-statement-section .wp-content h4:last-child {
   font-size: clamp(14px, 1.2vw, 17px);
   line-height: 1.6;
