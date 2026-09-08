@@ -8,6 +8,7 @@ import { constants } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { setTimeout as pause } from "node:timers/promises";
 import { chromium } from "@playwright/test";
+import { hasAnnouncedViteOrigin } from "./vite-readiness.mjs";
 
 const repository = fileURLToPath(new URL("../../", import.meta.url));
 const vitePath = fileURLToPath(new URL("../../node_modules/vite/bin/vite.js", import.meta.url));
@@ -126,7 +127,7 @@ async function main() {
   vite.stdout.on("data", (data) => { output = `${output}${data}`.slice(-8000); process.stdout.write(data); });
   vite.stderr.on("data", (data) => process.stderr.write(data));
   try {
-    await waitForVite(vite, () => output.includes(`${origin}/`));
+    await waitForVite(vite, () => hasAnnouncedViteOrigin(output, origin));
     await runRegression("tests/browser/home-editor.mjs");
     await runRegression("tests/browser/artwork-rooms.mjs");
     console.log(`\nPASS component regressions in ${((performance.now() - started) / 1000).toFixed(1)}s`);

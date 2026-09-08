@@ -2,7 +2,7 @@
 
 ## Resultados locales y del backend real
 
-- 68 pruebas unitarias y de guardas: correctas, incluidas 30 comprobaciones del código de correo con proveedor simulado.
+- 70 pruebas unitarias y de guardas: correctas, incluidas 30 comprobaciones del código de correo con proveedor simulado y dos de arranque de Vite con salida coloreada.
 - 50 pruebas Playwright: correctas en escritorio y móvil táctil emulado, con Supabase simulado y solicitudes externas bloqueadas.
 - Regresiones de componentes: texto/editor de inicio y 161 comprobaciones de ambientes, con navegación en cinco tamaños de pantalla.
 - Comprobación de tipos de aplicación y tests y compilación de producción: correctas. Vite conserva un aviso no bloqueante de tamaño del bundle principal.
