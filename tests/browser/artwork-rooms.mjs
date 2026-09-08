@@ -11,8 +11,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { chromium } from "@playwright/test";
 import WebSocket from "ws";
 
 const siteUrl = new URL(process.env.ROOMS_TEST_URL ?? "http://127.0.0.1:5173");
@@ -323,9 +323,17 @@ async function main() {
   assert(response.ok, "Start the local Vite dev server before running this script");
   const outputDirectory = await mkdtemp(join(tmpdir(), "toni-artwork-rooms-report-"));
   const profile = await mkdtemp(join(tmpdir(), "toni-artwork-rooms-chrome-"));
-  const chrome = spawn(process.env.CHROME_PATH ?? "/usr/bin/google-chrome", ["--headless=new", "--no-first-run", "--no-default-browser-check", "--disable-gpu", "--disable-dev-shm-usage", "--disable-background-networking", "--disable-component-update", "--remote-allow-origins=*", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { stdio: "ignore" });
+  let browserContext;
   let page;
   try {
+    // Keep the custom CDP assertions while sharing Playwright's reliable
+    // browser startup, CI sandbox defaults and launch-failure diagnostics.
+    browserContext = await chromium.launchPersistentContext(profile, {
+      executablePath: process.env.CHROME_PATH ?? undefined,
+      headless: true,
+      viewport: null,
+      args: ["--remote-debugging-port=0", "--remote-allow-origins=*"],
+    });
     let port;
     for (let attempt = 0; attempt < 150; attempt += 1) {
       try { port = Number((await readFile(join(profile, "DevToolsActivePort"), "utf8")).split("\n")[0]); break; } catch { await pause(100); }
@@ -380,15 +388,17 @@ async function main() {
     if (page) await page.capture("failure", outputDirectory).catch(() => {});
     throw error;
   } finally {
-    await writeFile(join(outputDirectory, "report.json"), JSON.stringify(report, null, 2));
-    console.log(`Report: ${join(outputDirectory, "report.json")}`);
-    page?.socket.close();
-    if (chrome.exitCode === null && chrome.signalCode === null) {
-      chrome.kill("SIGTERM");
-      await Promise.race([once(chrome, "exit"), pause(3000)]);
-      if (chrome.exitCode === null && chrome.signalCode === null) chrome.kill("SIGKILL");
+    try {
+      await writeFile(join(outputDirectory, "report.json"), JSON.stringify(report, null, 2));
+      console.log(`Report: ${join(outputDirectory, "report.json")}`);
+    } finally {
+      try {
+        page?.socket.close();
+        await browserContext?.close();
+      } finally {
+        await rm(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 150 });
+      }
     }
-    await rm(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 150 });
   }
 }
 

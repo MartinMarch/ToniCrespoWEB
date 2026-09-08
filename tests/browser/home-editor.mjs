@@ -8,8 +8,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { chromium } from "@playwright/test";
 import WebSocket from "ws";
 
 const siteUrl = new URL(process.env.HOME_EDITOR_TEST_URL ?? "http://127.0.0.1:5173");
@@ -226,9 +226,17 @@ async function testEditor(page) {
 async function main() {
   assert((await fetch(new URL('/@vite/client', siteUrl))).ok, "Start Vite first");
   const profile = await mkdtemp(join(tmpdir(), "toni-home-editor-chrome-"));
-  const chrome = spawn(process.env.CHROME_PATH ?? "/usr/bin/google-chrome", ["--headless=new", "--no-first-run", "--disable-gpu", "--disable-dev-shm-usage", "--disable-background-networking", "--disable-component-update", "--remote-allow-origins=*", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { stdio: "ignore" });
+  let browserContext;
   let page;
   try {
+    // Use the same Playwright launch defaults as E2E, including CI-compatible
+    // sandbox configuration and diagnostic browser logs if startup fails.
+    browserContext = await chromium.launchPersistentContext(profile, {
+      executablePath: process.env.CHROME_PATH ?? undefined,
+      headless: true,
+      viewport: null,
+      args: ["--remote-debugging-port=0", "--remote-allow-origins=*"],
+    });
     let port;
     for (let i = 0; i < 150; i++) {
       try { port = Number((await readFile(join(profile, "DevToolsActivePort"), "utf8")).split("\n")[0]); break; } catch { await pause(100); }
@@ -251,11 +259,12 @@ async function main() {
     assert(!blocked.some(request => request.method !== "GET" && request.method !== "HEAD"), "No attempted external writes");
     console.log(`PASS: browser regression complete; services mocked; ${blocked.length} external read requests blocked before sending.`);
   } finally {
-    page?.socket.close();
-    chrome.kill("SIGTERM");
-    await Promise.race([once(chrome, "exit"), pause(3000)]);
-    if (chrome.exitCode === null && chrome.signalCode === null) chrome.kill("SIGKILL");
-    await rm(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 150 });
+    try {
+      page?.socket.close();
+      await browserContext?.close();
+    } finally {
+      await rm(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 150 });
+    }
   }
 }
 
