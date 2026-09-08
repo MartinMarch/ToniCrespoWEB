@@ -14,7 +14,6 @@ export type MockBackendState = {
   storage: Record<string, MockAsset>;
   uploads: string[];
   deletedAssets: string[];
-  emails: MockRow[];
 };
 
 export function fixtureImage(width = 400, height = 400): Buffer {
@@ -46,7 +45,7 @@ function createSeed(): MockBackendState {
   });
   const poem = 'SOBRE LA PINTURA\n\nTras el caos de los pigmentos\nderramados sobre la mesa,\nlas manos quietas y manchadas\ny los pinceles desgastados,\nquedan los inquietos bisontes\nen la penumbra de la cueva,\nla mirada de la Gioconda\ncustodiando la humanidad,\nla santa y delicada cena\ndesprendiéndose del yeso,\nun fresco pintado en el cielo,\nel Gernika clamando la paz…\ny los valientes trazos de luz\nsobre la oscuridad de los lienzos.\n\nMartin March';
   return {
-    storage, uploads: [], deletedAssets: [], emails: [],
+    storage, uploads: [], deletedAssets: [],
     tables: {
       site_settings: [{ key: 'global', value: { defaultLanguage: 'ca', contact: {
         email: 'studio@example.test', phoneDisplay: '+34 600 111 222', phoneNumber: '34600111222', instagramHandle: '@toni.fixture', instagramUsername: 'toni.fixture',
@@ -190,10 +189,6 @@ export class MockSupabaseBackend {
         });
         return this.respond(route, 200, removed);
       }
-    }
-    if (url.pathname === '/functions/v1/send-contact-email' && method === 'POST') {
-      this.state.emails.push(body);
-      return this.respond(route, 200, { ok: true });
     }
     if (table && this.state.tables[table]) {
       if (method !== 'GET' && method !== 'HEAD' && role !== 'admin') return this.denied(route);

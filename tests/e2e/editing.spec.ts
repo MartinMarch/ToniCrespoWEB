@@ -435,6 +435,8 @@ test("site settings: saves shared contact destinations, handles errors and chang
   await dialog.getByRole("button", { name: "Guardar configuración", exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(page.locator('.site-footer a[href="mailto:artist-test@example.com"]')).toBeVisible();
+  await expect(page.locator('a.header-contact-trigger')).toHaveAttribute("href", "mailto:artist-test@example.com");
+  await expect(page.locator('.header-mobile-shortcuts a[href^="mailto:"]')).toHaveAttribute("href", "mailto:artist-test@example.com");
   await expect(page.locator('.site-header a[data-social="whatsapp"]')).toHaveAttribute("href", /34600111222/);
   await expect(page.locator('.site-header a[data-social="instagram"]')).toHaveAttribute("href", /artist\.test/);
   expect(backend.state.tables.site_settings.find((row) => row.key === "global")?.value.defaultLanguage).toBe("en");
@@ -443,6 +445,13 @@ test("site settings: saves shared contact destinations, handles errors and chang
   const contact = page.getByRole("dialog", { name: /^Contactar por la obra:/ });
   await expect(contact.locator(".contact-channel--whatsapp")).toHaveAttribute("href", /34600111222/);
   await expect(contact.locator(".contact-channel--instagram")).toHaveAttribute("href", /artist\.test/);
+  const artworkEmail = contact.getByRole("link", { name: "Correo", exact: true });
+  const emailUrl = new URL((await artworkEmail.getAttribute("href"))!);
+  expect(emailUrl.protocol).toBe("mailto:");
+  expect(decodeURIComponent(emailUrl.pathname)).toBe("artist-test@example.com");
+  expect(emailUrl.searchParams.get("subject")).toBe("Interés en la obra: Mar sereno");
+  expect(emailUrl.searchParams.get("body")).toContain("Mar sereno (Óleo sobre lienzo · 30 × 30 cm)");
+  expect([...emailUrl.searchParams.keys()].sort()).toEqual(["body", "subject"]);
   await contact.getByRole("button", { name: "Cerrar", exact: true }).click();
   await page.getByRole("button", { name: "Edición web", exact: true }).click();
   // The visitor's chosen Spanish persists despite changing the default.
@@ -463,4 +472,5 @@ test("site settings: saves shared contact destinations, handles errors and chang
   await expect(page.locator(".header-language__trigger")).toHaveAttribute("aria-label", /Deutsch/);
   await page.locator(".header-language__trigger").click();
   await expect(page.locator(".language-menu__default")).toHaveCount(0);
+  expect(backend.requests.filter((request) => new URL(request.url).pathname.startsWith("/functions/v1/"))).toEqual([]);
 });

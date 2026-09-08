@@ -45,25 +45,17 @@ Este comando no modifica datos. Comprueba las columnas `translations`, la config
 
 ## Correo de contacto
 
-El código vive en `supabase/functions/send-contact-email/index.ts` y se ejecuta de forma segura en Supabase Edge Functions. Usa Resend para el envío y consulta el destinatario configurado por el administrador en `site_settings`; `CONTACT_RECIPIENT_EMAIL` permanece como fallback seguro.
+El flujo activo usa enlaces `mailto:` y no requiere Resend, SMTP ni Edge Functions. El destinatario se guarda en `site_settings`, clave `global`, dentro de `value.contact.email`; el correo predeterminado es `eulaliaricart@gmail.com` y sigue siendo editable por el administrador.
 
-1. Crea una cuenta en Resend y verifica el dominio que usarás como remitente.
-2. Instala e inicia sesión en Supabase CLI, y enlaza este repositorio al proyecto correcto.
-3. Configura los secretos. Sustituye los valores de ejemplo por los reales y conserva el dominio remitente verificado por Resend:
+El header abre la aplicación de correo del visitante con sólo ese destinatario. El contacto de una obra prepara además un borrador con la información de la obra. Es necesario tener una aplicación de correo configurada y enviar el mensaje desde ella: la web no realiza ni confirma el envío.
 
-```bash
-supabase link --project-ref <PROJECT_REF>
-supabase secrets set \
-  RESEND_API_KEY=<RESEND_API_KEY> \
-  CONTACT_FROM_EMAIL='Toni Crespo <contacto@tu-dominio-verificado.com>' \
-  CONTACT_RECIPIENT_EMAIL=tonicrespo.art@gmail.com \
-  CONTACT_ALLOWED_ORIGINS='https://tonicrespo.com,https://www.tonicrespo.com,https://martinmarch.github.io,http://localhost:5173'
-supabase functions deploy send-contact-email
-```
+La validación obligatoria del despliegue sigue comprobando las pruebas de frontend y Supabase local, las lecturas públicas, las imágenes y una dirección de contacto válida. No depende de credenciales de un proveedor de correo.
 
-No pongas `RESEND_API_KEY` ni estas variables como `VITE_*`, ni las añadas a `.env` del frontend. Configúralas en los secretos de Edge Functions del proyecto. La función valida los campos, limita longitudes, usa `reply_to` con el email del visitante, contiene un campo antispam oculto y devuelve errores controlados si el proveedor falla o agota el tiempo de espera.
+### Función heredada, fuera del flujo activo
 
-La función `send-contact-email` se publicó el 8 de septiembre de 2026 con verificación JWT activa. La disponibilidad del envío depende de los secretos y del dominio Resend verificado; `npm run test:public-health -- --require-email-function` bloquea el despliegue si falta configuración, pero no sustituye una comprobación de entrega.
+Se conservan el código `supabase/functions/send-contact-email/index.ts`, sus pruebas unitarias y la función publicada con verificación JWT. El frontend ya no la invoca; no se ha eliminado ni modificado su configuración remota para este cambio.
+
+`npm run test:public-health -- --require-email-function` es sólo un diagnóstico opcional de esa función mediante un honeypot sin envío. Puede devolver un error por falta de `RESEND_API_KEY` o `CONTACT_FROM_EMAIL`; no forma parte de los requisitos del despliegue actual. Reactivar el envío web requeriría una decisión explícita, credenciales del proveedor, dominio remitente verificado y una prueba de entrega autorizada. Nunca exponer secretos de correo como variables `VITE_*`.
 
 ## Contenido y copias
 

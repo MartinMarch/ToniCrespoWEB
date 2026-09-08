@@ -15,7 +15,7 @@ export type SiteSettings = {
 
 export const defaultSiteSettings: SiteSettings = {
   contact: {
-    email: "tonicrespo.art@gmail.com",
+    email: "eulaliaricart@gmail.com",
     instagramHandle: "@tonicrespo.art",
     instagramUsername: "tonicrespo.art",
     phoneDisplay: "+34 659 959 352",

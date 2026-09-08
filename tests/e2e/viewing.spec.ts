@@ -403,7 +403,7 @@ test('photography opens its real image viewer and closes on Escape', async ({ pa
   await noOverflow(page);
 });
 
-test('artwork contact links use configured destinations, share header hover colors and submit only to the local mock', async ({ page, backend, isMobile }) => {
+test('artwork contact links use configured destinations, preserve channel hover colors and prepare a native email draft without sending', async ({ page, backend, isMobile }) => {
   await spanish(page);
   await page.goto('/lienzos/horizontes');
   await page.locator('#mar-sereno .artwork-interest-button').click();
@@ -428,39 +428,95 @@ test('artwork contact links use configured destinations, share header hover colo
     await expect(button).toHaveCSS('color', 'rgb(255, 255, 255)');
     await expect.poll(() => button.evaluate((element) => parseFloat(getComputedStyle(element, '::before').height) / element.getBoundingClientRect().height)).toBeGreaterThan(.9);
   }
-  await dialog.getByRole('button', { name: 'Correo', exact: true }).click();
-  const composer = page.getByRole('dialog', { name: 'Enviar un correo', exact: true });
-  await expect(composer.getByLabel('Asunto', { exact: true })).toHaveValue('Interés en la obra: Mar sereno');
-  await expect(composer.getByRole('textbox', { name: /^Mensaje/ })).toHaveValue(/Mar sereno/);
-  await composer.getByLabel('Nombre', { exact: true }).fill('Visitante de prueba');
-  await composer.getByLabel('Tu correo electrónico', { exact: true }).fill('visitor@example.test');
-  await composer.getByRole('button', { name: 'Enviar correo', exact: true }).click();
-  await expect(composer.getByText('Correo enviado. Toni responderá a la dirección indicada.', { exact: true })).toBeVisible();
-  expect(backend.state.emails).toHaveLength(1);
-  expect(backend.state.emails[0].artwork.title).toBe('Mar sereno');
-  expect(backend.state.emails[0].senderEmail).toBe('visitor@example.test');
-  await composer.locator('.admin-secondary-button').click();
-  await expect(composer).toHaveCount(0);
+  const emailLink = dialog.getByRole('link', { name: 'Correo', exact: true });
+  const email = new URL((await emailLink.getAttribute('href'))!);
+  expect(email.protocol).toBe('mailto:');
+  expect(decodeURIComponent(email.pathname)).toBe('studio@example.test');
+  expect(email.searchParams.get('subject')).toBe('Interés en la obra: Mar sereno');
+  expect(email.searchParams.get('body')).toBe('Hola Toni, me interesa esta obra: Mar sereno (Óleo sobre lienzo · 30 × 30 cm). ¿Podrías darme más información?');
+  expect(email.hash).toBe('');
+  expect([...email.searchParams.keys()].sort()).toEqual(['body', 'subject']);
+  await expect(dialog.locator('form, input, textarea')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  expect(backend.requests.filter((request) => !['GET', 'HEAD'].includes(request.method))).toEqual([]);
 });
 
-test('contact composer reports a simulated delivery error and allows retry without losing the draft', async ({ page, backend }) => {
+test('header, mobile shortcut and footer expose a plain native mailto link without a form or delivery service', async ({ page, backend }) => {
   await spanish(page);
   await page.goto('/');
-  const headerEmail = page.locator('.header-contact-trigger');
-  if (await headerEmail.isVisible()) await headerEmail.click();
+  const headerEmail = page.locator('a.header-contact-trigger');
+  const mobileEmail = page.locator('.header-mobile-shortcuts a.header-mobile-shortcut[href^="mailto:"]');
+  const footerEmail = page.locator('.site-footer__contact a[href^="mailto:"]');
+  for (const link of [headerEmail, mobileEmail, footerEmail]) {
+    await expect(link).toHaveAttribute('href', 'mailto:studio@example.test');
+    const email = new URL((await link.getAttribute('href'))!);
+    expect(email.search).toBe('');
+    expect(email.hash).toBe('');
+  }
+  if (await headerEmail.isVisible()) {
+    await headerEmail.focus();
+    await expect(headerEmail).toBeFocused();
+  }
   else {
     await page.locator('.header-menu-trigger').click();
-    await page.locator('.header-mobile-shortcuts').getByRole('button', { name: 'Correo', exact: true }).click();
+    await expect(mobileEmail).toBeVisible();
+    await mobileEmail.focus();
+    await expect(mobileEmail).toBeFocused();
+    await page.keyboard.press('Escape');
   }
-  const composer = page.getByRole('dialog', { name: 'Enviar un correo', exact: true });
-  await composer.getByLabel('Tu correo electrónico', { exact: true }).fill('visitor@example.test');
-  await composer.getByRole('textbox', { name: /^Mensaje/ }).fill('Consulta de prueba sin entrega externa.');
-  backend.failNext({ path: '/functions/v1/send-contact-email', method: 'POST', status: 503 });
-  await composer.getByRole('button', { name: 'Enviar correo', exact: true }).click();
-  await expect(composer.getByRole('alert')).toContainText('No se pudo enviar el correo');
-  await expect(composer.getByRole('textbox', { name: /^Mensaje/ })).toHaveValue('Consulta de prueba sin entrega externa.');
-  expect(backend.state.emails).toHaveLength(0);
-  await composer.getByRole('button', { name: 'Enviar correo', exact: true }).click();
-  await expect(composer.getByText('Correo enviado. Toni responderá a la dirección indicada.', { exact: true })).toBeVisible();
-  expect(backend.state.emails).toHaveLength(1);
+  await expect(footerEmail).toBeVisible();
+  await expect(page.locator('.contact-form, .contact-form__honeypot')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(backend.requests.filter((request) => !['GET', 'HEAD'].includes(request.method))).toEqual([]);
+});
+
+test('native artwork email preserves localized special characters and cannot turn artwork text into mail headers', async ({ page, backend }) => {
+  await spanish(page);
+  const artwork = backend.state.tables.artworks.find((row) => row.id === 'artwork-square')!;
+  artwork.title = 'Mar & llum? #1 — «Ànima»';
+  artwork.technique = 'Óleo & collage\nPigmentos';
+  artwork.translations = {
+    en: { title: 'Sea & light? #1 — «Soul»', technique: 'Oil & collage\nPigments' },
+    de: { title: 'Meer & Licht? #1 — «Seele»', technique: 'Öl & Collage\nPigmente' },
+    ca: { title: 'Mar & llum? #1 — «Ànima»', technique: 'Oli & collage\nPigments' },
+  };
+  await page.goto('/lienzos/horizontes');
+  for (const variant of [
+    { language: 'Español', title: artwork.title, technique: artwork.technique, subject: 'Interés en la obra', greeting: 'Hola Toni, me interesa esta obra:' },
+    { language: 'English', ...artwork.translations.en, subject: 'Interest in artwork', greeting: 'Hello Toni, I am interested in this artwork:' },
+    { language: 'Deutsch', ...artwork.translations.de, subject: 'Interesse an dem Werk', greeting: 'Hallo Toni, ich interessiere mich für dieses Werk:' },
+    { language: 'Català', ...artwork.translations.ca, subject: "Interès en l'obra", greeting: "Hola Toni, m'interessa aquesta obra:" },
+  ]) {
+    await page.locator('.header-language__trigger').click();
+    await page.getByRole('menuitemradio', { name: new RegExp(`^${variant.language}(?:\\s|$)`) }).click();
+    await page.locator('#mar-sereno .artwork-interest-button').click();
+    const dialog = page.locator('.contact-dialog');
+    const email = new URL((await dialog.locator('a.contact-channel--email').getAttribute('href'))!);
+    expect(email.protocol).toBe('mailto:');
+    expect(decodeURIComponent(email.pathname)).toBe('studio@example.test');
+    expect(email.searchParams.get('subject')).toBe(`${variant.subject}: ${variant.title}`);
+    expect(email.searchParams.get('body')).toContain(variant.greeting);
+    expect(email.searchParams.get('body')).toContain(variant.title);
+    expect(email.searchParams.get('body')).toContain(variant.technique.replace(/\r\n?|\n/g, '\r\n'));
+    expect(email.searchParams.get('body')).toContain('30 × 30 cm');
+    expect(email.hash).toBe('');
+    expect([...email.searchParams.keys()].sort()).toEqual(['body', 'subject']);
+    await page.keyboard.press('Escape');
+  }
+  expect(backend.requests.filter((request) => !['GET', 'HEAD'].includes(request.method))).toEqual([]);
+});
+
+test('missing contact settings use the Eulalia fallback consistently in every email entry point', async ({ page, backend }) => {
+  await spanish(page);
+  backend.state.tables.site_settings = [];
+  await page.goto('/lienzos/horizontes');
+  await expect(page.locator('a.header-contact-trigger')).toHaveAttribute('href', 'mailto:eulaliaricart@gmail.com');
+  await expect(page.locator('.header-mobile-shortcuts a[href^="mailto:"]')).toHaveAttribute('href', 'mailto:eulaliaricart@gmail.com');
+  await expect(page.locator('.site-footer__contact a[href^="mailto:"]')).toHaveAttribute('href', 'mailto:eulaliaricart@gmail.com');
+  await page.locator('#mar-sereno .artwork-interest-button').click();
+  const email = new URL((await page.locator('.contact-dialog a.contact-channel--email').getAttribute('href'))!);
+  expect(decodeURIComponent(email.pathname)).toBe('eulaliaricart@gmail.com');
+  expect(email.searchParams.get('subject')).toBe('Interés en la obra: Mar sereno');
+  expect(backend.requests.filter((request) => !['GET', 'HEAD'].includes(request.method))).toEqual([]);
 });

@@ -65,9 +65,9 @@ El acceso discreto a edición está en el footer. El header mantiene únicamente
 
 ## Correo de contacto
 
-El botón de correo del header y el contacto de cada obra usan la Edge Function `send-contact-email`. El navegador nunca recibe una clave SMTP o de Resend: la función obtiene de Supabase el destinatario elegido por el administrador y responde al email que introduzca el visitante.
+El correo funciona mediante enlaces `mailto:`. El botón del header abre la aplicación de correo del visitante únicamente con el destinatario; desde «Me interesa» de una obra se prepara además un borrador con su información. El destinatario predeterminado es `eulaliaricart@gmail.com` y el administrador puede cambiarlo en los ajustes de contacto guardados en Supabase.
 
-Antes de usarla en producción, crea una cuenta de [Resend](https://resend.com/), verifica el dominio remitente y despliega la función siguiendo [supabase/README.md](supabase/README.md). No se requiere una migración SQL adicional.
+El visitante necesita una aplicación o servicio de correo configurado y debe enviar el mensaje personalmente. La web no confirma un envío ni una entrega. Este flujo no requiere Resend, SMTP ni una Edge Function; el código heredado de `send-contact-email` se conserva, pero el frontend no lo utiliza.
 
 El modo edición queda integrado en cada vista:
 
@@ -106,10 +106,10 @@ npm run supabase:test:stop
 La integración remota exige las tres variables `SUPABASE_TEST_*` explícitas y `--run`. Nunca reutiliza automáticamente las claves del frontend. Producción requiere además `--allow-production`: las filas temporales permanecen ocultas y sólo se eliminan datos identificados por el UUID de esa ejecución. Consulta las precauciones y límites de limpieza en [tests/README.md](tests/README.md).
 
 ```bash
-npm run test:public-health -- --require-email-function
+npm run test:public-health
 ```
 
-La comprobación pública anterior valida el contenido y las imágenes reales con la clave anónima; la comprobación de correo usa un honeypot sin enviar mensajes y no acredita entrega del proveedor.
+La comprobación pública valida el contenido, las imágenes reales y el formato del correo de contacto con la clave anónima. No invoca servicios de envío. La opción `--require-email-function` se conserva exclusivamente para diagnosticar la antigua función Resend: no forma parte del flujo activo ni del despliegue.
 
 El workflow reutilizable [quality.yml](.github/workflows/quality.yml) ejecuta las pruebas del frontend y el Supabase temporal en paralelo. [deploy-pages.yml](.github/workflows/deploy-pages.yml) lo invoca para el mismo commit de `main` y espera su éxito antes de comprobar el Supabase público, compilar y publicar. Cualquier fallo bloquea el despliegue. Las PR y otras ramas ejecutan Quality sin publicar.
 

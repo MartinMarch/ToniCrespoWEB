@@ -75,7 +75,15 @@ export async function runPublicHealth({ env, fetchImpl = fetch, log = console.lo
   }
   if (!data.news_items.length) throw new Error("No hay noticias públicas; la comprobación de producción requiere contenido real.");
   const settings = data.site_settings.find((row) => row.key === "global")?.value;
-  if (!["es", "en", "de", "ca"].includes(settings?.defaultLanguage) || !settings?.contact?.email) throw new Error("Los ajustes globales de idioma/contacto están incompletos.");
+  if (!["es", "en", "de", "ca"].includes(settings?.defaultLanguage)) throw new Error("Los ajustes globales de idioma están incompletos.");
+  const contactEmail = typeof settings?.contact?.email === "string" ? settings.contact.email.trim() : "";
+  // Match getEmailContactUrl in src/lib/contact.ts: a single trimmed mailbox,
+  // never a recipient list, URL or pre-encoded headers. Do not approve a value
+  // the frontend would silently replace with its fallback recipient.
+  if (!/^[^\s\u0000-\u001f\u007f@<>,;:"\\?&#%]+@[^\s\u0000-\u001f\u007f@<>,;:"\\?&#%]+$/.test(contactEmail)) {
+    throw new Error("El correo de contacto debe ser una dirección válida, sin prefijo mailto ni parámetros.");
+  }
+  log("  ok dirección de contacto para mailto; el envío lo realiza la aplicación de correo del visitante");
   const media = collectRenderedMedia(data);
   if (!skipMedia) {
     const failures = [];
@@ -101,8 +109,8 @@ export async function runPublicHealth({ env, fetchImpl = fetch, log = console.lo
     const response = await request(`${config.base}${EMAIL_PATH}`, { method: "POST", headers, body: HONEYPOT_BODY });
     if (!response.ok) { await response.body?.cancel(); throw new Error(`send-contact-email honeypot: HTTP ${response.status}; función ausente o correo no configurado.`); }
     if ((await response.json()).ok !== true) throw new Error("La función de correo no confirmó el honeypot.");
-    log("  ok función de correo configurada: honeypot sin envío. NO verifica entrega ni credenciales del proveedor.");
-  } else log("  correo no comprobado (usar --require-email-function para bloquear el deploy si falta)");
+    log("  ok diagnóstico opcional de la función de correo heredada: honeypot sin envío. NO verifica entrega ni credenciales del proveedor.");
+  } else log("  contacto activo mediante mailto: no requiere ni invoca la función de correo heredada o Resend");
   log("Salud pública correcta. No se modificaron filas, archivos ni usuarios.");
   return { tables: Object.keys(TABLES).length, media: media.length, mediaChecked: !skipMedia, emailChecked: requireEmailFunction };
 }

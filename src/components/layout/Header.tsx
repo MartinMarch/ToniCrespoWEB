@@ -6,7 +6,6 @@ import { languageOptions, useSitePreferences, type SiteLanguage } from "../../ap
 import { getContactLinks } from "../../lib/contact";
 import { getEditableOperationErrorMessage } from "../../services/editableContentService";
 import { updateSiteSettings } from "../../services/siteSettingsService";
-import { useContactDialog } from "../contact/ContactDialogProvider";
 import { ToniCrespoLogo } from "./ToniCrespoLogo";
 
 const HEADER_HIDE_OFFSET = 48;
@@ -14,7 +13,6 @@ const HEADER_HIDE_OFFSET = 48;
 export function Header() {
   const { isEditMode } = useAdminSession();
   const { contactSettings, defaultLanguage, labels, language, refreshSiteSettings, setLanguage } = useSitePreferences();
-  const { openEmailComposer } = useContactDialog();
   const contactLinks = getContactLinks(contactSettings);
   const location = useLocation();
   const headerRef = useRef<HTMLElement | null>(null);
@@ -166,10 +164,10 @@ export function Header() {
             <span>{label}</span>
           </a>
         ))}
-        <button type="button" className="header-mobile-shortcut" onClick={() => openEmailComposer()}>
+        <a className="header-mobile-shortcut" href={contactLinks.emailUrl}>
           <Mail aria-hidden="true" />
           <span>{labels.contact.viaEmail}</span>
-        </button>
+        </a>
       </div>
 
       <ul className="header-socials" aria-label={labels.aria.socials}>
@@ -182,17 +180,16 @@ export function Header() {
           </li>
         ))}
         <li className="header-socials__item header-socials__item--email">
-          <button
-            type="button"
+          <a
+            href={contactLinks.emailUrl}
             className="header-contact-trigger"
             data-social="email"
             aria-label={labels.contact.emailButton}
             title={labels.contact.emailButton}
-            onClick={() => openEmailComposer()}
           >
             <span className="filled" />
             <Mail aria-hidden="true" />
-          </button>
+          </a>
         </li>
         <li
           className="header-socials__item header-language"

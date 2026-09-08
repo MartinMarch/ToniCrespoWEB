@@ -26,7 +26,7 @@ export function Footer() {
           </div>
 
           <div className="site-footer__contact">
-            <a href={`mailto:${contactSettings.email}`}>{contactSettings.email}</a>
+            <a href={contactLinks.emailUrl}>{contactSettings.email}</a>
             <a href={contactLinks.telephoneUrl}>{contactSettings.phoneDisplay}</a>
             <a href={contactLinks.instagramProfileUrl} target="_blank" rel="noreferrer">
               {contactSettings.instagramHandle}

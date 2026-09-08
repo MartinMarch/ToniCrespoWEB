@@ -4847,7 +4847,8 @@ p {
   }
 
   .brand {
-    justify-self: start;
+    grid-area: 1 / 1;
+    justify-self: center;
   }
 
   .main-nav {
@@ -4855,6 +4856,7 @@ p {
   }
 
   .header-socials {
+    grid-area: 1 / 2;
     justify-self: end;
   }
 

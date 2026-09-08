@@ -42,12 +42,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check live Supabase and published images (read-only)
-        run: npm run test:public-health -- --require-email-function
+      - name: Check live Supabase, contact address and published images (read-only)
+        run: npm run test:public-health
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          PUBLIC_HEALTH_ORIGIN: https://martinmarch.github.io
 
       - name: Build site
         run: npm run build

@@ -1,16 +1,16 @@
 # Pruebas de Toni Crespo
 
-Las pruebas de interfaz, la integración con Supabase y la comprobación del servicio publicado son complementarias. Una interfaz que funciona con respuestas simuladas no demuestra que las políticas RLS o el correo de producción funcionen.
+Las pruebas de interfaz, la integración con Supabase y la comprobación del servicio publicado son complementarias. Una interfaz que funciona con respuestas simuladas no demuestra que las políticas RLS funcionen. Los contactos por correo usan `mailto:`: las pruebas comprueban el enlace y el borrador, no que el visitante envíe el mensaje desde su aplicación.
 
 ## Suites y alcance
 
 | Ubicación | Qué comprueba | Servicios externos y escrituras |
 | --- | --- | --- |
-| `unit/*.test.mjs` | Atribución del poema, párrafos y traducciones de obras, texto escapado, medidas físicas y geometría de ambientes; código real de la función de correo con Deno y proveedor simulados (validación, CORS, destinatario y errores). | Sin acceso remoto ni envíos de correo. |
-| `e2e/*.spec.ts` | React real en Chromium de escritorio y móvil táctil emulado: navegación, idiomas, portada, footer, colecciones, visor, filtros, contactos y formularios de edición. Incluye errores, reintentos, cancelaciones, archivos huérfanos y contenido oculto. | Supabase, Storage, Auth y correo **simulados** mediante `helpers/mock-supabase.ts`; las solicitudes externas se interceptan. No modifica producción. |
+| `unit/*.test.mjs` | Atribución del poema, párrafos y traducciones de obras, texto escapado, medidas físicas y geometría de ambientes; también se conservan las pruebas del código heredado de correo con Deno y proveedor simulados. | Sin acceso remoto ni envíos de correo. La función Resend ya no pertenece al flujo activo. |
+| `e2e/*.spec.ts` | React real en Chromium de escritorio y móvil táctil emulado: navegación, idiomas, portada, footer, colecciones, visor, filtros, contactos `mailto:` y formularios de edición. Incluye errores, reintentos, cancelaciones, archivos huérfanos y contenido oculto. | Supabase, Storage y Auth **simulados** mediante `helpers/mock-supabase.ts`; las solicitudes externas se interceptan. No modifica producción ni envía correos. |
 | `integration/*.test.mjs` | Pruebas locales de las guardas del ejecutor Supabase y del comprobador público: configuración, privilegios, HTTP, imágenes, CORS y honeypot. | Solicitudes simuladas o bloqueadas. No modifica servicios reales. |
 | `integration/supabase-editing.mjs` | Auth, `is_admin`, RLS, CRUD editorial, traducciones, saltos de línea, visibilidad, ajustes aislados, Storage y borrado en cascada. | **Integración real** contra el destino elegido. Crea y elimina datos temporales; requiere consentimiento explícito. |
-| `integration/public-health.mjs` | Lectura anónima del contenido y ajustes publicados, aislamiento de administradores y disponibilidad de imágenes utilizadas por la web. | Lecturas reales. Opcionalmente comprueba la función de correo mediante un honeypot que no envía mensajes. |
+| `integration/public-health.mjs` | Lectura anónima del contenido y ajustes publicados, dirección de contacto válida, aislamiento de administradores y disponibilidad de imágenes utilizadas por la web. | Lecturas reales. No invoca Resend en el flujo activo; conserva un diagnóstico opcional de la función heredada. |
 | `browser/*.mjs` | Comprobaciones auxiliares anteriores de ambientes y texto/editor de inicio mediante Chrome. | Mantienen sus ejecutores de compatibilidad en `scripts/`; no sustituyen las suites anteriores. |
 
 ## Comprobación habitual, sin tocar producción
@@ -78,16 +78,23 @@ No interrumpir a la fuerza la ejecución. Un apagado, `SIGKILL` o fallo de red d
 
 ```bash
 npm run test:public-health
-npm run test:public-health -- --require-email-function
 ```
 
 Requiere `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`; en CI ambas deben estar en el entorno. Localmente admite `.env`. Rechaza claves de servicio y sesiones de usuario.
 
-Comprueba ocho tablas con consultas de lectura y `is_admin=false`. Exige contenido público real en inicio, trayectoria y noticias, además de los ajustes globales; por tanto no está diseñado para una base local recién migrada y vacía. Examina las imágenes efectivamente utilizadas, omitiendo portadas y fuentes antiguas que ya no se renderizan. Usa HEAD o un GET parcial cancelado, seis solicitudes concurrentes, dos reintentos y un límite global de cuatro minutos. No guarda imágenes ni descarga archivos completos.
+Comprueba ocho tablas con consultas de lectura y `is_admin=false`. Exige contenido público real en inicio, trayectoria y noticias, además de los ajustes globales y una dirección de contacto válida sin prefijo `mailto:` ni parámetros; por tanto no está diseñado para una base local recién migrada y vacía. Examina las imágenes efectivamente utilizadas, omitiendo portadas y fuentes antiguas que ya no se renderizan. Usa HEAD o un GET parcial cancelado, seis solicitudes concurrentes, dos reintentos y un límite global de cuatro minutos. No guarda imágenes ni descarga archivos completos.
 
 `--skip-media` sirve para una comprobación local rápida, pero omite la verificación de imágenes y no debe utilizarse como validación completa de despliegue.
 
-`--require-email-function` exige que `send-contact-email` responda a OPTIONS y a un POST con sólo `{"website":"health-check"}`. Este honeypot no envía un correo. Si se define `PUBLIC_HEALTH_ORIGIN` con el origen del frontend, comprueba también CORS. Un resultado correcto **no demuestra entrega**, validez de las credenciales Resend ni verificación del dominio remitente; eso necesita una prueba de envío autorizada por separado.
+El despliegue mantiene como requisitos las pruebas de frontend y Supabase local, esta comprobación pública completa y el build. No exige la antigua función de correo: el frontend abre `mailto:` al destinatario configurado, por defecto `eulaliaricart@gmail.com`. El header sólo incluye el destinatario; el contacto de una obra prepara un borrador. Hace falta una aplicación de correo configurada y una acción de envío del visitante; no se confirma entrega desde la web.
+
+### Diagnóstico opcional del correo heredado
+
+```bash
+npm run test:public-health -- --require-email-function
+```
+
+Esta opción no se ejecuta en el despliegue ni representa el contacto activo. Exige que la función heredada `send-contact-email` responda a OPTIONS y a un POST con sólo `{"website":"health-check"}`. El honeypot no envía un correo y puede fallar si faltan secretos Resend, sin afectar los enlaces `mailto:`. Si se define `PUBLIC_HEALTH_ORIGIN`, comprueba también CORS. Un resultado correcto no demuestra entrega ni validez de las credenciales del proveedor.
 
 ## Límites de la validación
 

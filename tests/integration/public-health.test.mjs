@@ -72,8 +72,43 @@ test("HEAD fallback uses a bounded GET Range without Supabase headers", async ()
   assert.deepEqual(calls, [{ method: "HEAD" }, { method: "GET", headers: { Range: "bytes=0-63" } }]);
 });
 
-test("required missing email function blocks the deployment health gate", async () => {
+test("optional legacy diagnostic fails when its email function is missing", async () => {
   await assert.rejects(runPublicHealth({ env, fetchImpl: mockPublicApi({ emailStatus: 404 }), skipMedia: true, requireEmailFunction: true, log: () => {} }), /OPTIONS: HTTP 404/);
+});
+
+test("active mailto health succeeds without invoking an unavailable legacy email function", async () => {
+  const calls = [];
+  const result = await runPublicHealth({ env, fetchImpl: mockPublicApi({ emailStatus: 503, calls }), log: () => {} });
+  assert.equal(result.mediaChecked, true);
+  assert.equal(result.emailChecked, false);
+  assert.ok(calls.every((call) => !call.url.includes("/functions/v1/")));
+});
+
+test("contact email follows the frontend mailbox guard including encoded headers and separators", async () => {
+  for (const email of [
+    null, "", "   ", "not-an-email", "mailto:contact@example.invalid",
+    "contact@example.invalid?bcc=other@example.invalid", "contact@example.invalid\r\nBcc: other@example.invalid",
+    "contact%0d%0abcc@example.invalid", "contact@example.invalid%3Fsubject=unexpected",
+    "contact&extra@example.invalid", '"contact"@example.invalid', "contact\\extra@example.invalid",
+    "contact@example.invalid,other@example.invalid", "contact@example.invalid;other@example.invalid",
+    "contact#extra@example.invalid", "contact\u0000@example.invalid", "contact\u007f@example.invalid",
+    "Display Name <contact@example.invalid>", "con tact@example.invalid",
+  ]) {
+    await assert.rejects(runPublicHealth({
+      env, skipMedia: true, log: () => {},
+      fetchImpl: mockPublicApi({ overrides: { site_settings: [{ key: "global", value: { defaultLanguage: "ca", contact: { email } } }] } }),
+    }), /correo de contacto debe ser una dirección válida/);
+  }
+});
+
+test("mailto health matches frontend trimming, plus addressing and mailbox domain rules", async () => {
+  for (const email of ["eulaliaricart@gmail.com", "  eulalia.ricart+web@gmail.com  ", "\ncontact@example.invalid\t", "contact@intranet"]) {
+    const result = await runPublicHealth({
+      env, skipMedia: true, log: () => {},
+      fetchImpl: mockPublicApi({ overrides: { site_settings: [{ key: "global", value: { defaultLanguage: "ca", contact: { email } } }] } }),
+    });
+    assert.equal(result.emailChecked, false);
+  }
 });
 
 test("email check sends only a honeypot, never actual email fields", async () => {
