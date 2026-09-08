@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent } from "react";
 import { Bold, ImagePlus, Italic, List, ListOrdered, LoaderCircle, Save, Upload } from "lucide-react";
 import { getEditorialPageTranslations } from "../../data/editorialTranslations";
+import { useSitePreferences } from "../../app/sitePreferences";
 import {
   cleanupOwnedEditableAssets,
   createArtwork,
@@ -480,7 +481,8 @@ const emptyArtworkFields: ArtworkFields = {
 };
 
 export function ArtworkEditorDialog({ artwork, collectionId, collectionTitle, onClose, onSaved }: ArtworkEditorDialogProps) {
-  const [activeLocale, setActiveLocale] = useState<EditorLocale>("es");
+  const { language } = useSitePreferences();
+  const [activeLocale, setActiveLocale] = useState<EditorLocale>(() => artwork ? language : "es");
   const [values, setValues] = useState<LocaleValues<ArtworkFields>>(() =>
     createLocaleValues<ArtworkFields>(
       getArtworkFields(artwork),

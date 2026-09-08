@@ -549,6 +549,7 @@ function translateNewsItem(
       ...image,
       ...staticTranslation?.images?.[index],
       ...image.translations?.[language],
+      alt: translation?.imageAlt ?? image.translations?.[language]?.alt ?? staticTranslation?.images?.[index]?.alt ?? image.alt,
     })),
   };
 }

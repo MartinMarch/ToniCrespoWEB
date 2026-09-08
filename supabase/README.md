@@ -11,13 +11,9 @@ Esta carpeta es la fuente de verdad local para el esquema y las copias operativa
 
 ### Proyecto actual de Toni Crespo
 
-Las migraciones de edición contextual ya están aplicadas en el proyecto que contiene el contenido migrado. Para la revisión final, ejecuta ahora, y solo una vez, el contenido completo de:
+Revisado el 8 de septiembre de 2026: el esquema de edición, traducciones y ajustes globales ya está aplicado. Se ha aplicado por MCP la reparación `20260908105629_restore_site_assets_policies.sql`, que añade únicamente los permisos ausentes del bucket `site-assets` sin modificar archivos ni contenido.
 
-```text
-supabase/migrations/20260904120000_final_site_settings.sql
-```
-
-Esta migración añade la configuración editable del idioma predeterminado y de los destinos de email, WhatsApp e Instagram. La web conserva valores seguros por defecto mientras no esté aplicada, pero el administrador no podrá guardar esos ajustes.
+El esquema anterior se aplicó manualmente y no constaba en el historial remoto de migraciones. No ejecutes `db push` indiscriminadamente ni repitas todo el historial sobre producción: primero compara el estado real. La reparación nueva es idempotente y queda registrada remotamente.
 
 No vuelvas a ejecutar `20260810210000_admin_editing.sql` ni `20260811100000_site_assets_bucket.sql` sobre este proyecto: sus tablas, buckets y políticas ya existen y el SQL Editor puede devolver errores de políticas duplicadas.
 
@@ -29,8 +25,11 @@ Ejecuta una sola vez los archivos completos, exactamente en este orden:
 2. `supabase/migrations/20260811100000_site_assets_bucket.sql`
 3. `supabase/migrations/20260811110000_contextual_editing.sql`
 4. `supabase/migrations/20260904120000_final_site_settings.sql`
+5. `supabase/migrations/20260908105629_restore_site_assets_policies.sql`
 
 Después restaura una copia con `npm run restore:supabase -- --latest --write` o carga el contenido desde una copia válida.
+
+Para pruebas locales, `supabase/config.toml` define el proyecto aislado `tonicrespo-tests` en los puertos 55321/55322. `npm run supabase:test:start` aplica las migraciones automáticamente sobre una base vacía, sin importar contenido del cliente. `npm run test:supabase:local` verifica la edición y `npm run supabase:test:stop` elimina sólo esa infraestructura temporal. Más detalles en [tests/README.md](../tests/README.md).
 
 ### Drafts
 
@@ -58,11 +57,13 @@ supabase secrets set \
   RESEND_API_KEY=<RESEND_API_KEY> \
   CONTACT_FROM_EMAIL='Toni Crespo <contacto@tu-dominio-verificado.com>' \
   CONTACT_RECIPIENT_EMAIL=tonicrespo.art@gmail.com \
-  CONTACT_ALLOWED_ORIGINS='https://tonicrespo.com,https://www.tonicrespo.com,http://localhost:5173'
+  CONTACT_ALLOWED_ORIGINS='https://tonicrespo.com,https://www.tonicrespo.com,https://martinmarch.github.io,http://localhost:5173'
 supabase functions deploy send-contact-email
 ```
 
-No pongas `RESEND_API_KEY` ni estas variables como `VITE_*`, ni las añadas a `.env` del frontend. El archivo `supabase/functions/send-contact-email/.env.example` solo sirve de guía para desarrollo local. La función valida los campos, limita longitudes, usa `reply_to` con el email del visitante y contiene un campo antispam oculto.
+No pongas `RESEND_API_KEY` ni estas variables como `VITE_*`, ni las añadas a `.env` del frontend. Configúralas en los secretos de Edge Functions del proyecto. La función valida los campos, limita longitudes, usa `reply_to` con el email del visitante, contiene un campo antispam oculto y devuelve errores controlados si el proveedor falla o agota el tiempo de espera.
+
+La función `send-contact-email` se publicó el 8 de septiembre de 2026 con verificación JWT activa. La disponibilidad del envío depende de los secretos y del dominio Resend verificado; `npm run test:public-health -- --require-email-function` bloquea el despliegue si falta configuración, pero no sustituye una comprobación de entrega.
 
 ## Contenido y copias
 

@@ -22,6 +22,7 @@ export function Footer() {
               <ToniCrespoLogo />
             </Link>
             <p>{labels.footer.location}</p>
+            <span className="site-footer__copyright">© 2026 Toni Crespo</span>
           </div>
 
           <div className="site-footer__contact">
@@ -34,7 +35,6 @@ export function Footer() {
         </div>
         <div className="site-footer__bottom">
           <div className="site-footer__legal">
-            <span>© 2026 Toni Crespo</span>
             <span>{labels.footer.baseline}</span>
           </div>
           <div className="site-footer__editor-actions">

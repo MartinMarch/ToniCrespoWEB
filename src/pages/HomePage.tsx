@@ -3,11 +3,13 @@ import { useEditableContent, useEditablePage } from "../app/editableContent";
 import { useSitePreferences } from "../app/sitePreferences";
 import { SupportLandingGrid } from "../components/support/SupportLandingGrid";
 import { PageLoader } from "../components/ui/Loaders";
+import { formatHomeStatementHtml } from "../lib/homeStatement";
 
 export function HomePage() {
   const { labels } = useSitePreferences();
   const { getSupportCollections, isLoading } = useEditableContent();
   const page = useEditablePage("home");
+  const statementHtml = useMemo(() => formatHomeStatementHtml(page?.html ?? ""), [page?.html]);
   const supportItems = useMemo(
     () =>
       (["canvas", "paper"] as const).map((kind) => {
@@ -38,7 +40,7 @@ export function HomePage() {
 
       {page?.html ? (
         <section className="page-section narrow home-statement-section">
-          <div className="wp-content" dangerouslySetInnerHTML={{ __html: page.html }} />
+          <div className="wp-content" dangerouslySetInnerHTML={{ __html: statementHtml }} />
         </section>
       ) : null}
     </>

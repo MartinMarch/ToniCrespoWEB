@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   getEmptyEditableContentSnapshot,
   getEditableOperationErrorMessage,
@@ -28,28 +28,37 @@ const EditableContentContext = createContext<EditableContentContextValue | null>
 
 export function EditableContentProvider({ children }: { children: ReactNode }) {
   const { language } = useSitePreferences();
-  const { isEditMode } = useAdminSession();
+  const { isAdmin, isEditMode, session } = useAdminSession();
+  const accessScope = isAdmin && session ? session.user.id : "public";
+  const requestSequence = useRef(0);
   const [snapshot, setSnapshot] = useState<EditableContentSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refreshContent = useCallback(async () => {
+    const requestId = ++requestSequence.current;
     setIsLoading(true);
     setError(null);
 
     try {
-      setSnapshot(await loadEditableContent());
+      const nextSnapshot = await loadEditableContent();
+      if (requestId === requestSequence.current) setSnapshot(nextSnapshot);
     } catch (contentError) {
+      if (requestId !== requestSequence.current) return;
       setError(getEditableOperationErrorMessage(contentError, "No se pudo cargar el contenido editable."));
       setSnapshot(getEmptyEditableContentSnapshot());
     } finally {
-      setIsLoading(false);
+      if (requestId === requestSequence.current) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // RLS returns different rows to visitors and admins. Discard the previous
+    // identity's snapshot and ignore in-flight responses from an earlier load.
+    setSnapshot(null);
     void refreshContent();
-  }, [refreshContent]);
+    return () => { requestSequence.current += 1; };
+  }, [accessScope, refreshContent]);
 
   const emptySnapshot = useMemo(() => getEmptyEditableContentSnapshot(), []);
 

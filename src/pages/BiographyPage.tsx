@@ -12,12 +12,14 @@ import {
 } from "../services/editableContentService";
 import { useSitePreferences } from "../app/sitePreferences";
 import { LoadingImage, PageLoader } from "../components/ui/Loaders";
+import { splitPoemAttribution } from "../lib/poem";
 
 export function BiographyPage() {
   const { labels } = useSitePreferences();
   const { isEditMode } = useAdminSession();
   const { isLoading, refreshContent } = useEditableContent();
   const biography = useBiographyContent();
+  const poem = splitPoemAttribution(biography.poem);
   const editableBiography = useEditingContent().biography;
   const [isTextEditorOpen, setIsTextEditorOpen] = useState(false);
   const [galleryImageToDelete, setGalleryImageToDelete] = useState<string | null>(null);
@@ -176,9 +178,10 @@ export function BiographyPage() {
               ) : null}
             </div>
 
-            {biography.poem ? (
+            {poem.body ? (
               <blockquote className="biography-poem">
-                <em>{biography.poem}</em>
+                <em className="biography-poem__body">{poem.body}</em>
+                {poem.author ? <footer className="biography-poem__author">{poem.author}</footer> : null}
               </blockquote>
             ) : null}
 

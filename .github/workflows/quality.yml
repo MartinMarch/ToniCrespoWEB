@@ -2,22 +2,20 @@ name: Quality
 
 on:
   push:
+    branches-ignore:
+      - main
   pull_request:
+  workflow_call:
   workflow_dispatch:
-    inputs:
-      run_supabase_integration:
-        description: Run the remote Supabase integration test
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   quality:
-    name: Lint and build
+    name: Frontend · desktop and mobile
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -25,22 +23,20 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run build
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: npm run test:ci
+      - name: Browser test report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
 
   supabase-integration:
-    name: Supabase integration
-    needs: quality
+    name: Supabase · Auth, CRUD, RLS and Storage
     runs-on: ubuntu-latest
-    if: >-
-      ${{ (vars.RUN_SUPABASE_INTEGRATION == 'true' ||
-      (github.event_name == 'workflow_dispatch' && inputs.run_supabase_integration)) &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    env:
-      SUPABASE_TEST_RUN: "true"
-      SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
-      SUPABASE_TEST_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
-      SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -48,4 +44,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run test:supabase
+      - name: Start isolated Supabase and apply migrations
+        run: npm run supabase:test:start
+      - name: Exercise real editing and access control
+        run: npm run test:supabase:local
+      - name: Remove temporary test infrastructure
+        if: always()
+        run: npm run supabase:test:stop

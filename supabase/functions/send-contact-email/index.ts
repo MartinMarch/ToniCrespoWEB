@@ -58,23 +58,31 @@ Deno.serve(async (request) => {
   }
 
   const recipientEmail = await getConfiguredRecipientEmail();
-  const response = await fetch("https://api.resend.com/emails", {
-    body: JSON.stringify({
-      from: senderEmail,
-      reply_to: validation.senderEmail,
-      subject: `[Web Toni Crespo] ${validation.subject}`,
-      text: formatEmailText(validation),
-      to: [recipientEmail],
-    }),
-    headers: {
-      Authorization: `Bearer ${resendApiKey}`,
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-  });
+  let response: Response;
+  try {
+    response = await fetch("https://api.resend.com/emails", {
+      body: JSON.stringify({
+        from: senderEmail,
+        reply_to: validation.senderEmail,
+        subject: `[Web Toni Crespo] ${validation.subject}`,
+        text: formatEmailText(validation),
+        to: [recipientEmail],
+      }),
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    console.error("No se pudo conectar con el proveedor de correo.");
+    return json({ error: "No se pudo enviar el correo. Inténtalo de nuevo más tarde." }, 502, corsHeaders);
+  }
 
   if (!response.ok) {
-    console.error("Resend rechazó el correo:", response.status, await response.text());
+    console.error("Resend rechazó el correo:", response.status);
+    await response.body?.cancel();
     return json({ error: "No se pudo enviar el correo. Inténtalo de nuevo más tarde." }, 502, corsHeaders);
   }
 
@@ -88,6 +96,7 @@ async function getConfiguredRecipientEmail() {
 
   try {
     const response = await fetch(`${supabaseUrl}/rest/v1/site_settings?key=eq.global&select=value`, {
+      signal: AbortSignal.timeout(10_000),
       headers: {
         apikey: serviceRoleKey,
         Authorization: `Bearer ${serviceRoleKey}`,

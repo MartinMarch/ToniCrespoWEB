@@ -5,11 +5,11 @@ import { defaultSiteSettings, type SiteContactSettings } from "../types/siteSett
 export type SiteLanguage = "es" | "en" | "de" | "ca";
 export type MeasurementUnit = "cm" | "in";
 
-export const languageOptions: ReadonlyArray<{ code: SiteLanguage; flag: string | null; label: string; shortLabel: string }> = [
-  { code: "ca", flag: null, label: "Català", shortLabel: "CA" },
-  { code: "es", flag: "🇪🇸", label: "Español", shortLabel: "ES" },
-  { code: "en", flag: "🇬🇧", label: "English", shortLabel: "EN" },
-  { code: "de", flag: "🇩🇪", label: "Deutsch", shortLabel: "DE" },
+export const languageOptions: ReadonlyArray<{ code: SiteLanguage; label: string; shortLabel: string }> = [
+  { code: "ca", label: "Català", shortLabel: "CA" },
+  { code: "es", label: "Español", shortLabel: "ES" },
+  { code: "en", label: "English", shortLabel: "EN" },
+  { code: "de", label: "Deutsch", shortLabel: "DE" },
 ];
 
 const preferenceStorageKeys = {
@@ -73,6 +73,9 @@ const translations = {
       mockupNext: "Ambiente siguiente",
       mockupSelector: "Selector de ambientes",
       viewMockup: "Ver ambiente",
+      roomScaleNote: "Ambiente generado con IA. Escala orientativa según las medidas de la obra.",
+      roomScaleUnknown: "Ambiente generado con IA. Vista sin escala: faltan medidas verificadas.",
+      noFittingRoom: "Esta obra supera el espacio disponible en nuestros ambientes. No la reducimos para que encaje.",
       viewFullscreen: "Ver a pantalla completa",
       viewArtworkInRooms: "Ver obra colocada en ambientes",
       interest: "Me interesa / contacta con el artista por esta obra",
@@ -97,6 +100,9 @@ const translations = {
       notFoundPage: "Pagina no encontrada",
       collectionNotFound: "Colección no encontrada",
       noImages: "No se han encontrado imágenes.",
+      emptyCollection: "Colección sin obras",
+      artworkSingular: "obra",
+      artworkPlural: "obras",
     },
     aria: {
       mainNav: "Navegacion principal",
@@ -123,6 +129,10 @@ const translations = {
       walnutGallery: "Aparador de nogal",
       limestoneGallery: "Galería de caliza",
       oakGallery: "Galería de roble",
+      oakNook: "Rincón de roble",
+      stoneNook: "Rincón de piedra",
+      readingRoom: "Sala de lectura",
+      charcoalRoom: "Sala gris oscuro",
     },
   },
   en: {
@@ -180,6 +190,9 @@ const translations = {
       mockupNext: "Next room view",
       mockupSelector: "Room view selector",
       viewMockup: "View room",
+      roomScaleNote: "AI-generated room. Approximate scale based on the artwork dimensions.",
+      roomScaleUnknown: "AI-generated room. Preview not to scale: verified dimensions are missing.",
+      noFittingRoom: "This artwork exceeds the available wall space. We do not reduce its scale to make it fit.",
       viewFullscreen: "View full screen",
       viewArtworkInRooms: "View artwork in room settings",
       interest: "I am interested / contact the artist about this artwork",
@@ -204,6 +217,9 @@ const translations = {
       notFoundPage: "Page not found",
       collectionNotFound: "Collection not found",
       noImages: "No images were found.",
+      emptyCollection: "Collection without artworks",
+      artworkSingular: "artwork",
+      artworkPlural: "artworks",
     },
     aria: {
       mainNav: "Main navigation",
@@ -230,6 +246,10 @@ const translations = {
       walnutGallery: "Walnut sideboard",
       limestoneGallery: "Limestone gallery",
       oakGallery: "Oak gallery",
+      oakNook: "Oak nook",
+      stoneNook: "Stone nook",
+      readingRoom: "Reading room",
+      charcoalRoom: "Charcoal room",
     },
   },
   de: {
@@ -287,6 +307,9 @@ const translations = {
       mockupNext: "Nächste Raumansicht",
       mockupSelector: "Auswahl der Raumansichten",
       viewMockup: "Raumansicht anzeigen",
+      roomScaleNote: "KI-generierter Raum. Ungefähre Skalierung anhand der Werkmaße.",
+      roomScaleUnknown: "KI-generierter Raum. Ansicht ohne Maßstab: bestätigte Maße fehlen.",
+      noFittingRoom: "Dieses Werk ist für die verfügbaren Wandflächen zu groß. Es wird nicht verkleinert, um hineinzupassen.",
       viewFullscreen: "Vollbild anzeigen",
       viewArtworkInRooms: "Werk in Raumansichten anzeigen",
       interest: "Ich bin interessiert / den Künstler zu diesem Werk kontaktieren",
@@ -311,6 +334,9 @@ const translations = {
       notFoundPage: "Seite nicht gefunden",
       collectionNotFound: "Sammlung nicht gefunden",
       noImages: "Es wurden keine Bilder gefunden.",
+      emptyCollection: "Sammlung ohne Werke",
+      artworkSingular: "Werk",
+      artworkPlural: "Werke",
     },
     aria: {
       mainNav: "Hauptnavigation",
@@ -337,6 +363,10 @@ const translations = {
       walnutGallery: "Walnusssideboard",
       limestoneGallery: "Kalksteingalerie",
       oakGallery: "Eichengalerie",
+      oakNook: "Eichennische",
+      stoneNook: "Steinnische",
+      readingRoom: "Lesezimmer",
+      charcoalRoom: "Dunkelgrauer Raum",
     },
   },
   ca: {
@@ -394,6 +424,9 @@ const translations = {
       mockupNext: "Ambient següent",
       mockupSelector: "Selector d'ambients",
       viewMockup: "Veure ambient",
+      roomScaleNote: "Ambient generat amb IA. Escala orientativa segons les mides de l’obra.",
+      roomScaleUnknown: "Ambient generat amb IA. Vista sense escala: falten mides verificades.",
+      noFittingRoom: "Aquesta obra supera l’espai disponible als nostres ambients. No la reduïm perquè hi càpiga.",
       viewFullscreen: "Veure a pantalla completa",
       viewArtworkInRooms: "Veure l'obra col·locada en ambients",
       interest: "M'interessa / contacta amb l'artista per aquesta obra",
@@ -418,6 +451,9 @@ const translations = {
       notFoundPage: "Pàgina no trobada",
       collectionNotFound: "Col·lecció no trobada",
       noImages: "No s'han trobat imatges.",
+      emptyCollection: "Col·lecció sense obres",
+      artworkSingular: "obra",
+      artworkPlural: "obres",
     },
     aria: {
       mainNav: "Navegació principal",
@@ -444,6 +480,10 @@ const translations = {
       walnutGallery: "Aparador de noguera",
       limestoneGallery: "Galeria de calcària",
       oakGallery: "Galeria de roure",
+      oakNook: "Racó de roure",
+      stoneNook: "Racó de pedra",
+      readingRoom: "Sala de lectura",
+      charcoalRoom: "Sala gris fosc",
     },
   },
 } as const;

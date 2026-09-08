@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -12,7 +13,9 @@ import {
 import { Eye, EyeOff, ImagePlus, Pencil, Trash2 } from "lucide-react";
 import { useContactDialog } from "../contact/ContactDialogProvider";
 import { useSitePreferences, type SiteLabels } from "../../app/sitePreferences";
-import { getSupabasePublicStorageUrl } from "../../lib/supabaseClient";
+import { roomScenes, type ArtworkRoomScene } from "../../data/roomScenes";
+import { getArtworkMetrics, getArtworkPlacement, getMockupsForArtwork } from "../../lib/artworkRoomGeometry";
+import { getArtworkEditorialText } from "../../lib/artworkEditorialText";
 import type { SupportKind } from "../../types/support";
 import { EditIconButton } from "../admin/AdminUi";
 import { LoadingImage } from "../ui/Loaders";
@@ -29,112 +32,11 @@ type ArtworkShowcaseListProps = {
   supportKind?: SupportKind;
 };
 
-type RoomMockupTemplate = {
-  id: string;
-  labelKey: keyof SiteLabels["rooms"];
-  backgroundUrl: string;
-  cardRatio: string;
-  tone: "cool" | "neutral" | "warm" | "dark";
-  preferredLongestCm: {
-    min: number;
-    max: number;
-  };
-  wall: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    widthCm: number;
-    heightCm: number;
-  };
-};
-
-const roomMockups: readonly RoomMockupTemplate[] = [
-  {
-    id: "small-print-studio",
-    labelKey: "studio",
-    backgroundUrl: getSupabasePublicStorageUrl("site-assets", "legacy/mockups/generated/small-print-wall-v3.jpg"),
-    cardRatio: "3 / 2",
-    tone: "warm",
-    preferredLongestCm: { min: 0, max: 65 },
-    wall: { x: 50, y: 5, width: 52, height: 69, widthCm: 90, heightCm: 80 },
-  },
-  {
-    id: "small-print-walnut-alcove",
-    labelKey: "walnutAlcove",
-    backgroundUrl: getSupabasePublicStorageUrl("site-assets", "legacy/mockups/generated/small-print-cabinet-v1.jpg"),
-    cardRatio: "3 / 2",
-    tone: "warm",
-    preferredLongestCm: { min: 0, max: 65 },
-    wall: { x: 50, y: 6, width: 54, height: 66, widthCm: 95, heightCm: 82 },
-  },
-  {
-    id: "small-print-bedroom",
-    labelKey: "bedroom",
-    backgroundUrl: getSupabasePublicStorageUrl("site-assets", "legacy/mockups/generated/small-print-bedroom-bench-v1.jpg"),
-    cardRatio: "3 / 2",
-    tone: "warm",
-    preferredLongestCm: { min: 0, max: 65 },
-    wall: { x: 50, y: 6, width: 58, height: 65, widthCm: 100, heightCm: 82 },
-  },
-  {
-    id: "medium-canvas-living-room",
-    labelKey: "livingRoom",
-    backgroundUrl: getSupabasePublicStorageUrl("site-assets", "legacy/mockups/generated/medium-canvas-wall-v2.jpg"),
-    cardRatio: "3 / 2",
-    tone: "neutral",
-    preferredLongestCm: { min: 66, max: 160 },
-    wall: { x: 50, y: 6, width: 61, height: 55, widthCm: 240, heightCm: 144 },
-  },
-  {
-    id: "medium-canvas-linen-room",
-    labelKey: "linenRoom",
-    backgroundUrl: getSupabasePublicStorageUrl("site-assets", "legacy/mockups/generated/medium-canvas-sofa-v1.jpg"),
-    cardRatio: "3 / 2",
-    tone: "neutral",
-    preferredLongestCm: { min: 66, max: 160 },
-    wall: { x: 50, y: 5, width: 72, height: 61, widthCm: 270, heightCm: 160 },
-  },
-  {
-    id: "medium-canvas-walnut-sideboard",
-    labelKey: "walnutGallery",
-    backgroundUrl: getSupabasePublicStorageUrl("site-assets", "legacy/mockups/generated/medium-canvas-sideboard-v1.jpg"),
-    cardRatio: "3 / 2",
-    tone: "warm",
-    preferredLongestCm: { min: 66, max: 160 },
-    wall: { x: 50, y: 4, width: 73, height: 66, widthCm: 250, heightCm: 160 },
-  },
-  {
-    id: "wide-diptych-travertine-room",
-    labelKey: "travertineRoom",
-    backgroundUrl: getSupabasePublicStorageUrl("site-assets", "legacy/mockups/generated/wide-diptych-wall-v2.jpg"),
-    cardRatio: "3 / 2",
-    tone: "dark",
-    preferredLongestCm: { min: 160, max: 260 },
-    wall: { x: 50, y: 10, width: 75, height: 52, widthCm: 360, heightCm: 168 },
-  },
-  {
-    id: "wide-diptych-limestone-gallery",
-    labelKey: "limestoneGallery",
-    backgroundUrl: getSupabasePublicStorageUrl("site-assets", "legacy/mockups/generated/wide-diptych-limestone-bench-v1.jpg"),
-    cardRatio: "3 / 2",
-    tone: "dark",
-    preferredLongestCm: { min: 160, max: 260 },
-    wall: { x: 50, y: 7, width: 78, height: 58, widthCm: 430, heightCm: 175 },
-  },
-  {
-    id: "wide-diptych-oak-gallery",
-    labelKey: "oakGallery",
-    backgroundUrl: getSupabasePublicStorageUrl("site-assets", "legacy/mockups/generated/wide-diptych-oak-bench-v1.jpg"),
-    cardRatio: "3 / 2",
-    tone: "dark",
-    preferredLongestCm: { min: 160, max: 260 },
-    wall: { x: 50, y: 6, width: 80, height: 61, widthCm: 430, heightCm: 170 },
-  },
-] as const;
-
-export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDelete, onEdit, onToggleVisibility, supportKind }: ArtworkShowcaseListProps) {
+export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDelete, onEdit, onToggleVisibility }: ArtworkShowcaseListProps) {
   const { labels } = useSitePreferences();
+  const mockupTitleId = useId();
+  const mockupDescriptionId = useId();
+  const mockupDialogRef = useRef<HTMLDivElement | null>(null);
   const [activeArtwork, setActiveArtwork] = useState<CurrentArtwork | null>(null);
   const [activeMockupArtwork, setActiveMockupArtwork] = useState<CurrentArtwork | null>(null);
   const [activeMockupIndex, setActiveMockupIndex] = useState(0);
@@ -143,10 +45,36 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
   const mockupGalleryRef = useRef<HTMLDivElement | null>(null);
   const mockupScrollUnlockRef = useRef<number | null>(null);
   const activeMockups = useMemo(
-    () => (activeMockupArtwork ? getMockupsForArtwork(activeMockupArtwork) : []),
+    () => (activeMockupArtwork ? getMockupsForArtwork(activeMockupArtwork, roomScenes) : []),
     [activeMockupArtwork],
   );
   const hasMockupNavigation = activeMockups.length > 1;
+  const hasKnownMockupDimensions = activeMockupArtwork !== null && getArtworkMetrics(activeMockupArtwork).widthCm !== null;
+
+  useEffect(() => {
+    if (!activeMockupArtwork) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = mockupDialogRef.current;
+    dialog?.querySelector<HTMLButtonElement>(".artwork-lightbox__close")?.focus();
+    function trapFocus(event: KeyboardEvent) {
+      if (event.key !== "Tab" || !dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]'));
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+    dialog?.addEventListener("keydown", trapFocus);
+    return () => {
+      dialog?.removeEventListener("keydown", trapFocus);
+      previousFocus?.focus({ preventScroll: true });
+    };
+  }, [activeMockupArtwork]);
 
   useEffect(() => {
     if (!activeArtwork && !activeMockupArtwork) return;
@@ -208,7 +136,7 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
     if (!gallery || !target) return;
 
     gallery.scrollTo({
-      behavior: "smooth",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
       left: target.offsetLeft - (gallery.clientWidth - target.offsetWidth) / 2,
     });
   }
@@ -303,21 +231,23 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
               aria-hidden="true"
             />
           </div>
-          <div className="artwork-lightbox__caption">
+          <div className="artwork-lightbox__caption" onClick={(event) => event.stopPropagation()}>
             <h2>{activeArtwork.title}</h2>
             {activeArtwork.technique ? <p>{activeArtwork.technique}</p> : null}
             {activeArtwork.dimensions ? <ArtworkDimensions value={activeArtwork.dimensions} /> : null}
+            <ArtworkEditorialText artwork={activeArtwork} />
           </div>
         </div>
       ) : null}
 
       {activeMockupArtwork ? (
-        <div className="artwork-mockup-lightbox" role="dialog" aria-modal="true" onClick={() => setActiveMockupArtwork(null)}>
+        <div ref={mockupDialogRef} className="artwork-mockup-lightbox" role="dialog" aria-modal="true" aria-labelledby={mockupTitleId} aria-describedby={mockupDescriptionId} onClick={() => setActiveMockupArtwork(null)}>
           <LightboxCloseButton label={labels.actions.closeMockups} onClick={() => setActiveMockupArtwork(null)} />
           <div className="artwork-mockup-lightbox__inner" onClick={(event) => event.stopPropagation()}>
             <div className="artwork-mockup-lightbox__heading">
               <span>{labels.actions.mockups}</span>
-              <h2>{activeMockupArtwork.title}</h2>
+              <h2 id={mockupTitleId}>{activeMockupArtwork.title}</h2>
+              {activeMockupArtwork.dimensions ? <ArtworkDimensions value={activeMockupArtwork.dimensions} /> : null}
             </div>
             <div className="artwork-mockup-carousel">
               {hasMockupNavigation ? (
@@ -337,6 +267,7 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
                 aria-label={`${labels.actions.mockupsFor} ${activeMockupArtwork.title}`}
                 tabIndex={0}
               >
+                {activeMockups.length === 0 ? <p className="artwork-mockup-empty">{labels.actions.noFittingRoom}</p> : null}
                 {activeMockups.map((mockup, index) => (
                   <RoomMockup
                     key={mockup.id}
@@ -345,7 +276,6 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
                     label={labels.rooms[mockup.labelKey]}
                     backgroundUrl={mockup.backgroundUrl}
                     isActive={index === activeMockupIndex}
-                    supportKind={supportKind}
                   />
                 ))}
               </div>
@@ -358,20 +288,25 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
                 />
               ) : null}
             </div>
-            {hasMockupNavigation ? (
-              <div className="artwork-mockup-pagination" aria-label={labels.actions.mockupSelector}>
-                {activeMockups.map((mockup, index) => (
-                  <button
-                    key={mockup.id}
-                    type="button"
-                    className={`artwork-mockup-pagination__dot${index === activeMockupIndex ? " is-active" : ""}`}
-                    aria-label={`${labels.actions.viewMockup} ${index + 1}: ${labels.rooms[mockup.labelKey]}`}
-                    aria-current={index === activeMockupIndex ? "true" : undefined}
-                    onClick={() => showMockup(index)}
-                  />
-                ))}
-              </div>
-            ) : null}
+            <div className="artwork-mockup-lightbox__footer">
+              {hasMockupNavigation ? (
+                <div className="artwork-mockup-pagination" aria-label={labels.actions.mockupSelector}>
+                  {activeMockups.map((mockup, index) => (
+                    <button
+                      key={mockup.id}
+                      type="button"
+                      className={`artwork-mockup-pagination__dot${index === activeMockupIndex ? " is-active" : ""}`}
+                      aria-label={`${labels.actions.viewMockup} ${index + 1}: ${labels.rooms[mockup.labelKey]}`}
+                      aria-current={index === activeMockupIndex ? "true" : undefined}
+                      onClick={() => showMockup(index)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              <p id={mockupDescriptionId} className="artwork-mockup-lightbox__scale">
+                {hasKnownMockupDimensions ? labels.actions.roomScaleNote : labels.actions.roomScaleUnknown}
+              </p>
+            </div>
           </div>
         </div>
       ) : null}
@@ -437,9 +372,6 @@ function ArtworkShowcase({
   onMockupsSelect: (artwork: CurrentArtwork) => void;
 }) {
   const { openArtworkContact } = useContactDialog();
-  const caption = artwork.caption.trim();
-  const shouldShowCaption =
-    !artwork.technique && !artwork.dimensions && caption && caption.toLowerCase() !== artwork.title.toLowerCase();
 
   return (
     <article className={`artwork-showcase${!artwork.isPublished ? " is-unpublished" : ""}`} id={artwork.slug}>
@@ -491,7 +423,7 @@ function ArtworkShowcase({
         <h2>{artwork.title}</h2>
         {artwork.technique ? <p>{artwork.technique}</p> : null}
         {artwork.dimensions ? <ArtworkDimensions value={artwork.dimensions} /> : null}
-        {shouldShowCaption ? <p>{caption}</p> : null}
+        <ArtworkEditorialText artwork={artwork} />
         <div className="artwork-showcase__actions">
           <button
             type="button"
@@ -516,6 +448,18 @@ function ArtworkShowcase({
   );
 }
 
+function ArtworkEditorialText({ artwork }: { artwork: CurrentArtwork }) {
+  const { caption, description } = getArtworkEditorialText(artwork);
+  if (!caption && !description) return null;
+
+  return (
+    <div className="artwork-editorial">
+      {caption ? <p className="artwork-editorial__caption">{caption}</p> : null}
+      {description ? <p className="artwork-editorial__description">{description}</p> : null}
+    </div>
+  );
+}
+
 function getArtworkPresentationStyle(artwork: CurrentArtwork): CSSProperties {
   const ratio = artwork.width && artwork.height
     ? artwork.width / artwork.height
@@ -534,30 +478,25 @@ function RoomMockup({
   label,
   backgroundUrl,
   isActive,
-  supportKind,
 }: {
   artwork: CurrentArtwork;
-  template: RoomMockupTemplate;
+  template: ArtworkRoomScene;
   label: string;
   backgroundUrl: string;
   isActive: boolean;
-  supportKind?: SupportKind;
 }) {
-  const presentation = supportKind === "paper" || isPaperArtwork(artwork) ? "framed" : "canvas";
 
   return (
     <article
-      className={`room-mockup-card room-mockup-card--${presentation} room-mockup-card--${template.tone}${
-        isActive ? " is-active" : ""
-      }`}
+      className={`room-mockup-card${isActive ? " is-active" : ""}`}
+      data-room-id={template.id}
+      aria-label={label}
       style={getMockupStyle(artwork, template)}
     >
-      <LoadingImage className="room-mockup-card__background" src={backgroundUrl} alt="" loading="lazy" aria-hidden="true" />
+      <LoadingImage className="room-mockup-card__background" src={backgroundUrl} alt="" loading={isActive ? "eager" : "lazy"} aria-hidden="true" />
       <span className="room-mockup-card__artwork">
-        <span className="room-mockup-card__frame">
-          <span className="room-mockup-card__artwork-surface">
-            <LoadingImage src={artwork.imageUrl} alt={artwork.title} loading="lazy" />
-          </span>
+        <span className="room-mockup-card__artwork-surface">
+          <LoadingImage src={artwork.imageUrl} alt={artwork.title} loading={isActive ? "eager" : "lazy"} />
         </span>
       </span>
       <span className="room-mockup-card__label">{label}</span>
@@ -582,179 +521,17 @@ function getLensStyle(artwork: CurrentArtwork, position: { x: number; y: number 
   };
 }
 
-function getMockupsForArtwork(artwork: CurrentArtwork) {
-  const metrics = getArtworkMetrics(artwork);
-  const longestCm = metrics.longestCm;
-  const sizeMatchedMockups = longestCm
-    ? roomMockups.filter(
-        (mockup) =>
-          longestCm >= mockup.preferredLongestCm.min && longestCm <= mockup.preferredLongestCm.max,
-      )
-    : [];
-  const candidates = sizeMatchedMockups.length > 0 ? sizeMatchedMockups : roomMockups;
-
-  return [...candidates]
-    .map((mockup) => ({
-      mockup,
-      score:
-        getRatioScore(metrics.ratio, getWallRatio(mockup)) +
-        getSizePreferenceScore(metrics.longestCm, mockup.preferredLongestCm),
-    }))
-    .sort((a, b) => a.score - b.score)
-    .slice(0, 3)
-    .map(({ mockup }) => mockup);
-}
-
-function getMockupStyle(artwork: CurrentArtwork, template: RoomMockupTemplate): CSSProperties {
-  const metrics = getArtworkMetrics(artwork);
-  const placement = getArtworkPlacement(metrics, template);
+function getMockupStyle(artwork: CurrentArtwork, template: ArtworkRoomScene): CSSProperties {
+  const placement = getArtworkPlacement(getArtworkMetrics(artwork), template);
 
   return {
     "--mockup-artwork-height": `${placement.height}%`,
     "--mockup-artwork-width": `${placement.width}%`,
     "--mockup-artwork-x": `${placement.x}%`,
     "--mockup-artwork-y": `${placement.y}%`,
-    "--mockup-card-ratio": template.cardRatio,
-    "--mockup-card-width-factor": `${getCardRatio(template.cardRatio)}`,
-    "--mockup-artwork-brightness": `${getArtworkBrightness(template.tone)}`,
+    "--mockup-card-ratio": `${template.imageAspectRatio}`,
+    "--mockup-artwork-brightness": `${template.brightness}`,
   } as CSSProperties;
-}
-
-function getArtworkBrightness(tone: RoomMockupTemplate["tone"]) {
-  if (tone === "dark") return 0.68;
-  if (tone === "warm") return 0.8;
-  if (tone === "cool") return 0.86;
-  return 0.88;
-}
-
-function getArtworkMetrics(artwork: CurrentArtwork) {
-  const physicalDimensions = parsePhysicalDimensions(artwork.dimensions || artwork.description || artwork.caption);
-  const pixelRatio = artwork.width && artwork.height ? artwork.width / artwork.height : null;
-  const physicalRatio = physicalDimensions ? physicalDimensions.width / physicalDimensions.height : null;
-  const reversedPhysicalRatio = physicalDimensions ? physicalDimensions.height / physicalDimensions.width : null;
-  const shouldUseReversedPhysicalRatio =
-    physicalRatio &&
-    reversedPhysicalRatio &&
-    pixelRatio &&
-    getRatioScore(reversedPhysicalRatio, pixelRatio) < getRatioScore(physicalRatio, pixelRatio);
-  const orientedDimensions = physicalDimensions
-    ? shouldUseReversedPhysicalRatio
-      ? { width: physicalDimensions.height, height: physicalDimensions.width }
-      : physicalDimensions
-    : null;
-  const ratio = pixelRatio ?? (orientedDimensions ? orientedDimensions.width / orientedDimensions.height : 1);
-  const dimensions = orientedDimensions ? fitPhysicalSizeToImageRatio(orientedDimensions, ratio) : null;
-
-  return {
-    ratio,
-    widthCm: dimensions?.width ?? null,
-    heightCm: dimensions?.height ?? null,
-    longestCm: dimensions ? Math.max(dimensions.width, dimensions.height) : null,
-  };
-}
-
-function fitPhysicalSizeToImageRatio(dimensions: { width: number; height: number }, imageRatio: number) {
-  const longestCm = Math.max(dimensions.width, dimensions.height);
-
-  return imageRatio >= 1
-    ? { width: longestCm, height: longestCm / imageRatio }
-    : { width: longestCm * imageRatio, height: longestCm };
-}
-
-function parsePhysicalDimensions(value: string | null) {
-  if (!value) return null;
-
-  const match = value
-    .replace(/,/g, ".")
-    .match(/(\d+(?:\.\d+)?)\s*[xX×]\s*(\d+(?:\.\d+)?)/);
-
-  if (!match) return null;
-
-  return {
-    width: Number(match[1]),
-    height: Number(match[2]),
-  };
-}
-
-function getArtworkPlacement(
-  metrics: ReturnType<typeof getArtworkMetrics>,
-  template: RoomMockupTemplate,
-) {
-  if (metrics.widthCm !== null && metrics.heightCm !== null) {
-    const requestedWidth = template.wall.width * (metrics.widthCm / template.wall.widthCm);
-    const requestedHeight = template.wall.height * (metrics.heightCm / template.wall.heightCm);
-    const fitScale = Math.min(
-      1,
-      (template.wall.width * 0.94) / requestedWidth,
-      (template.wall.height * 0.94) / requestedHeight,
-    );
-    const width = requestedWidth * fitScale;
-    const height = requestedHeight * fitScale;
-
-    return {
-      x: template.wall.x,
-      y: template.wall.y + (template.wall.height - height) / 2,
-      width,
-      height,
-    };
-  }
-
-  const cardRatio = getCardRatio(template.cardRatio);
-  const scale = getArtworkScale(metrics.longestCm);
-  const availableWidth = (template.wall.width / 100) * scale;
-  const availableHeight = ((template.wall.height / 100) * scale) / cardRatio;
-  const artworkWidth = Math.min(availableWidth, availableHeight * metrics.ratio);
-  const artworkHeight = artworkWidth / metrics.ratio;
-  const width = artworkWidth * 100;
-  const height = artworkHeight * cardRatio * 100;
-
-  return {
-    x: template.wall.x,
-    y: template.wall.y + (template.wall.height - height) / 2,
-    width,
-    height,
-  };
-}
-
-function getSizePreferenceScore(
-  longestCm: number | null,
-  range: RoomMockupTemplate["preferredLongestCm"],
-) {
-  if (!longestCm) return 0;
-
-  const midpoint = (range.min + range.max) / 2;
-  return Math.abs(longestCm - midpoint) / Math.max(range.max - range.min, 1);
-}
-
-function getArtworkScale(longestCm: number | null) {
-  if (!longestCm) return 0.79;
-
-  return clamp(0.57 + longestCm / 340, 0.62, 0.94);
-}
-
-function getWallRatio(template: RoomMockupTemplate) {
-  return getCardRatio(template.cardRatio) * (template.wall.width / template.wall.height);
-}
-
-function isPaperArtwork(artwork: CurrentArtwork) {
-  const searchable = [artwork.collectionSlug, artwork.technique, artwork.caption, artwork.description]
-    .filter(Boolean)
-    .join(" ")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-
-  return searchable.includes("papel") || searchable.includes("lamina");
-}
-
-function getCardRatio(cardRatio: string) {
-  const [widthPart, heightPart] = cardRatio.split("/").map((part) => Number(part.trim()));
-
-  return widthPart / heightPart;
-}
-
-function getRatioScore(artworkRatio: number, openingRatio: number) {
-  return Math.abs(Math.log(artworkRatio / openingRatio));
 }
 
 function handleMockupGalleryWheel(event: WheelEvent<HTMLDivElement>) {

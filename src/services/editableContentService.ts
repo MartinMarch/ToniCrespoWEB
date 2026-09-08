@@ -569,6 +569,14 @@ export async function updateNewsItem(input: {
 
   if (error) throw error;
   if (!data) throw new Error("No se encontró la noticia que querías actualizar.");
+
+  // The editor exposes one shared alt text for the complete gallery. Gallery
+  // images are separate rows; their old text must not hide the saved value.
+  const { error: imageError } = await supabase!
+    .from("news_item_images")
+    .update({ image_alt: input.imageAlt.trim() || input.title.trim() })
+    .eq("news_item_id", input.id);
+  if (imageError) throw imageError;
 }
 
 export async function deleteNewsItem(input: { id: string; imageUrls: string[] }) {

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Mail, Menu, Star, X } from "lucide-react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { Mail, Menu, Star, X } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAdminSession } from "../../app/adminSession";
 import { languageOptions, useSitePreferences, type SiteLanguage } from "../../app/sitePreferences";
@@ -18,6 +18,9 @@ export function Header() {
   const contactLinks = getContactLinks(contactSettings);
   const location = useLocation();
   const headerRef = useRef<HTMLElement | null>(null);
+  const languageTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const languageMenuRef = useRef<HTMLDivElement | null>(null);
+  const languageFocusTargetRef = useRef<"active" | "first" | "last">("active");
   const lastScrollY = useRef(0);
   const [isHidden, setIsHidden] = useState(false);
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
@@ -25,6 +28,7 @@ export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSavingDefault, setIsSavingDefault] = useState(false);
   const [defaultLanguageError, setDefaultLanguageError] = useState<string | null>(null);
+  const currentLanguageLabel = languageOptions.find((option) => option.code === language)?.label ?? language;
   const links = [
     { label: labels.nav.work, path: "/obra" },
     { label: labels.nav.photography, path: "/fotografia" },
@@ -75,6 +79,7 @@ export function Header() {
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        if (isLanguageOpen) languageTriggerRef.current?.focus();
         setIsLanguageOpen(false);
         setIsMenuOpen(false);
       }
@@ -88,9 +93,33 @@ export function Header() {
     };
   }, [isLanguageOpen, isMenuOpen]);
 
+  useEffect(() => {
+    if (!isLanguageOpen) return;
+    const frame = requestAnimationFrame(() => {
+      const options = languageMenuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]');
+      if (!options?.length) return;
+      const active = languageMenuRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]');
+      const target = languageFocusTargetRef.current;
+      (target === "first" ? options[0] : target === "last" ? options[options.length - 1] : active ?? options[0]).focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isLanguageOpen]);
+
+  function handleLanguageMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+    if (!options.length) return;
+    const current = options.indexOf(document.activeElement as HTMLButtonElement);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1
+      : (current + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+    options[next].focus();
+  }
+
   function selectLanguage(nextLanguage: SiteLanguage) {
     setLanguage(nextLanguage);
     setIsLanguageOpen(false);
+    languageTriggerRef.current?.focus();
   }
 
   async function selectDefaultLanguage(nextLanguage: SiteLanguage) {
@@ -165,23 +194,38 @@ export function Header() {
             <Mail aria-hidden="true" />
           </button>
         </li>
-        <li className="header-socials__item header-language">
+        <li
+          className="header-socials__item header-language"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsLanguageOpen(false);
+          }}
+        >
           <button
+            ref={languageTriggerRef}
             type="button"
             className="header-language__trigger"
-            aria-label={labels.aria.language}
+            aria-label={`${labels.aria.language}: ${currentLanguageLabel}`}
+            title={`${labels.aria.language}: ${currentLanguageLabel}`}
+            aria-controls="header-language-menu"
             aria-expanded={isLanguageOpen}
             aria-haspopup="menu"
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+              event.preventDefault();
+              languageFocusTargetRef.current = event.key === "ArrowDown" ? "first" : "last";
+              setIsMenuOpen(false);
+              setIsLanguageOpen(true);
+            }}
             onClick={() => {
+              languageFocusTargetRef.current = "active";
               setIsMenuOpen(false);
               setIsLanguageOpen((current) => !current);
             }}
           >
             <LanguageFlag language={language} />
-            <ChevronDown aria-hidden="true" />
           </button>
           {isLanguageOpen ? (
-            <div className="language-menu" role="menu" aria-label={labels.aria.language}>
+            <div ref={languageMenuRef} id="header-language-menu" className="language-menu" role="menu" aria-label={labels.aria.language} onKeyDown={handleLanguageMenuKeyDown}>
               {languageOptions.map((option) => (
                 <div className="language-menu__option" role="none" key={option.code}>
                   <button
@@ -197,6 +241,7 @@ export function Header() {
                   {isEditMode ? (
                     <button
                       type="button"
+                      role="menuitem"
                       className={`language-menu__default${defaultLanguage === option.code ? " is-active" : ""}`}
                       aria-label={`Usar ${option.label} como idioma predeterminado`}
                       title={defaultLanguage === option.code ? "Idioma predeterminado" : "Establecer como predeterminado"}
@@ -233,12 +278,29 @@ export function Header() {
 }
 
 export function LanguageFlag({ language }: { language: SiteLanguage }) {
-  const option = languageOptions.find((candidate) => candidate.code === language);
-
-  return option?.flag ? (
-    <span className="language-flag language-flag--emoji" aria-hidden="true">{option.flag}</span>
-  ) : (
-    <span className="language-flag language-flag--ca" aria-hidden="true" />
+  return (
+    <svg className={`language-flag language-flag--${language}`} viewBox="0 0 36 36" aria-hidden="true" focusable="false">
+      {language === "ca" ? <>
+        <path fill="#f6ce35" d="M0 0h36v36H0z" />
+        <path fill="#c72b32" d="M0 4h36v4H0zm0 8h36v4H0zm0 8h36v4H0zm0 8h36v4H0z" />
+      </> : null}
+      {language === "es" ? <>
+        <path fill="#aa151b" d="M0 0h36v36H0z" />
+        <path fill="#f1bf00" d="M0 9h36v18H0z" />
+      </> : null}
+      {language === "de" ? <>
+        <path fill="#171717" d="M0 0h36v12H0z" />
+        <path fill="#d32630" d="M0 12h36v12H0z" />
+        <path fill="#f6c945" d="M0 24h36v12H0z" />
+      </> : null}
+      {language === "en" ? <>
+        <path fill="#012169" d="M0 0h36v36H0z" />
+        <path stroke="#ffffff" strokeWidth="8" d="m0 0 36 36m0-36L0 36" />
+        <path fill="#c8102e" d="M0 0h3l15 15v3zm36 0v3L21 18h-3zm0 36h-3L18 21v-3zM0 36v-3l15-15h3z" />
+        <path stroke="#ffffff" strokeWidth="12" d="M18 0v36M0 18h36" />
+        <path stroke="#c8102e" strokeWidth="7" d="M18 0v36M0 18h36" />
+      </> : null}
+    </svg>
   );
 }
 
