@@ -4948,6 +4948,10 @@ p {
     font-size: clamp(25px, 7vw, 34px);
   }
 
+  .support-page--index .support-page__heading h1 {
+    text-align: center;
+  }
+
   .artwork-showcase__content {
     width: min(100%, var(--artwork-display-width-mobile, 100%));
   }
