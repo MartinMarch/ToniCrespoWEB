@@ -451,7 +451,11 @@ test("site settings: saves shared contact destinations, handles errors and chang
   const germanDefault = page.getByRole("menuitem", { name: "Usar Deutsch como idioma predeterminado", exact: true });
   await germanDefault.click();
   await expect(germanDefault).toBeDisabled();
-  expect(backend.state.tables.site_settings.find((row) => row.key === "global")?.value.defaultLanguage).toBe("de");
+  await expect(page.locator(".header-language__trigger")).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("menuitemradio", { name: "Deutsch", exact: true })).toBeFocused();
+  await expect.poll(() => backend.state.tables.site_settings.find((row) => row.key === "global")?.value.defaultLanguage).toBe("de");
+  await expect(germanDefault).toHaveAttribute("title", "Idioma predeterminado");
+  await expect(page.getByRole("menuitemradio", { name: "Deutsch", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Cerrar sesión", exact: true }).click();
   await page.evaluate(() => localStorage.removeItem("toni-crespo-language"));

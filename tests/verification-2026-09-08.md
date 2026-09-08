@@ -16,6 +16,7 @@
 2. Editar el texto alternativo de una noticia no actualizaba sus imágenes hijas. Ahora se sincroniza y se respeta la traducción seleccionada.
 3. Faltaban las políticas de acceso de `site-assets`. Reparación aplicada mediante la migración remota `20260908105629_restore_site_assets_policies.sql`.
 4. Una excepción de red del proveedor de correo no producía una respuesta controlada. Ahora devuelve JSON con CORS y existe un tiempo máximo de espera.
+5. En Chromium 153, marcar el idioma predeterminado cerraba inesperadamente el menú al deshabilitar la estrella enfocada. Reproducido con el mismo navegador de GitHub y corregido trasladando antes el foco al selector adyacente, sin relajar la comprobación del guardado.
 
 ## Bloqueo real de publicación: correo
 

@@ -246,7 +246,14 @@ export function Header() {
                       aria-label={`Usar ${option.label} como idioma predeterminado`}
                       title={defaultLanguage === option.code ? "Idioma predeterminado" : "Establecer como predeterminado"}
                       disabled={isSavingDefault || defaultLanguage === option.code}
-                      onClick={() => void selectDefaultLanguage(option.code)}
+                      onClick={(event) => {
+                        // Disabling the focused star can blur it to the document
+                        // in Chromium. Keep focus inside the open language menu.
+                        event.currentTarget.parentElement
+                          ?.querySelector<HTMLButtonElement>('[role="menuitemradio"]')
+                          ?.focus();
+                        void selectDefaultLanguage(option.code);
+                      }}
                     >
                       <Star aria-hidden="true" />
                     </button>
