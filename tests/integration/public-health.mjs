@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import { setTimeout as delay } from "node:timers/promises";
 import { readProjectEnv } from "../../scripts/lib/supabaseSnapshotUtils.mjs";
 
 const TABLES = Object.freeze({
@@ -13,6 +14,8 @@ const TABLES = Object.freeze({
 });
 const EMAIL_PATH = "/functions/v1/send-contact-email";
 const HONEYPOT_BODY = JSON.stringify({ website: "health-check" });
+const HEALTH_TIMEOUT_MS = 240_000;
+const REQUEST_SPACING_MS = 250;
 
 export function publicHealthConfig(env) {
   if (!env.VITE_SUPABASE_URL?.trim() || !env.VITE_SUPABASE_ANON_KEY?.trim()) {
@@ -30,22 +33,61 @@ export function publicHealthConfig(env) {
   return { base: url.origin, headers: { apikey: key, ...(key.startsWith("sb_publishable_") ? {} : { Authorization: `Bearer ${key}` }) } };
 }
 
-export async function runPublicHealth({ env, fetchImpl = fetch, log = console.log, skipMedia = false, requireEmailFunction = false }) {
-  const config = publicHealthConfig(env);
-  const deadline = AbortSignal.timeout(240_000);
-  const request = async (url, init = {}) => {
+export function createPublicRequest({ fetchImpl = fetch, now = Date.now, sleep = (ms, signal) => delay(ms, undefined, { signal }), deadline = AbortSignal.timeout(HEALTH_TIMEOUT_MS) } = {}) {
+  const expiresAt = now() + HEALTH_TIMEOUT_MS;
+  const origins = new Map();
+  const assertBudget = () => {
+    if (deadline.aborted || now() >= expiresAt) throw new Error("La comprobación pública superó el límite de cuatro minutos.");
+  };
+  const startRequest = (origin, notBefore) => {
+    // Only admission is serialized: responses can still be fetched concurrently.
+    const admitted = origin.queue.then(async () => {
+      for (;;) {
+        assertBudget();
+        const target = Math.max(origin.nextStart, origin.cooldownUntil, notBefore);
+        if (target >= expiresAt) throw new Error("La espera requerida supera el tiempo disponible del límite de cuatro minutos.");
+        if (target <= now()) break;
+        try { await sleep(target - now(), deadline); } catch (error) { assertBudget(); throw error; }
+        // Another worker may have extended the shared cooldown while we slept.
+      }
+      origin.nextStart = now() + REQUEST_SPACING_MS;
+    });
+    origin.queue = admitted.catch(() => {});
+    return admitted;
+  };
+  return async (url, init = {}) => {
+    const originKey = new URL(url).origin;
+    if (!origins.has(originKey)) origins.set(originKey, { nextStart: 0, cooldownUntil: 0, queue: Promise.resolve() });
+    const origin = origins.get(originKey);
     let last;
+    let notBefore = 0;
     for (let attempt = 0; attempt < 3; attempt++) {
+      await startRequest(origin, notBefore);
+      let retryDelay = 1_000 * 2 ** Math.min(attempt, 1);
       try {
         const response = await fetchImpl(url, { ...init, redirect: "error", signal: AbortSignal.any([deadline, AbortSignal.timeout(12_000)]) });
+        if (deadline.aborted || now() >= expiresAt) { await response.body?.cancel(); assertBudget(); }
         if ((response.status !== 429 && response.status < 500) || (init.method === "HEAD" && response.status === 501)) return response;
+        const retryAfter = response.headers.get("retry-after")?.trim();
+        if (retryAfter) {
+          const advertisedDelay = /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1_000 : Date.parse(retryAfter) - now();
+          if (!Number.isNaN(advertisedDelay)) retryDelay = Math.max(retryDelay, advertisedDelay);
+        }
+        // A 429 pauses every queued request to this origin, not only this image.
+        if (response.status === 429) origin.cooldownUntil = Math.max(origin.cooldownUntil, now() + retryDelay);
         await response.body?.cancel();
         last = new Error(`HTTP ${response.status}`);
       } catch (error) { last = error; }
-      if (deadline.aborted) throw new Error("La comprobación pública superó el límite de cuatro minutos.");
+      assertBudget();
+      notBefore = now() + retryDelay;
     }
     throw new Error(`Petición pública fallida en ${new URL(url).pathname}: ${last?.message ?? "error de red"}`);
   };
+}
+
+export async function runPublicHealth({ env, fetchImpl = fetch, log = console.log, skipMedia = false, requireEmailFunction = false, timing = {} }) {
+  const config = publicHealthConfig(env);
+  const request = createPublicRequest({ ...timing, fetchImpl });
   const jsonGet = async (path) => {
     const response = await request(`${config.base}${path}`, { method: "GET", headers: config.headers });
     if (!response.ok) { await response.body?.cancel(); throw new Error(`${path.split("?")[0]}: HTTP ${response.status}`); }

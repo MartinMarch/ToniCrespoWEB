@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkMedia, collectRenderedMedia, publicHealthConfig, runPublicHealth } from "./public-health.mjs";
+import { checkMedia, collectRenderedMedia, createPublicRequest, publicHealthConfig, runPublicHealth as executePublicHealth } from "./public-health.mjs";
+
+function fastClock() {
+  let time = Date.UTC(2026, 8, 8);
+  const sleeps = [];
+  return { now: () => time, sleep: async (ms) => { sleeps.push(ms); time += ms; }, sleeps };
+}
+
+// Exercise production pacing and retries without real timers or remote requests.
+const runPublicHealth = (options) => executePublicHealth({ ...options, timing: fastClock() });
 
 const env = { VITE_SUPABASE_URL: "https://supabase.example.invalid", VITE_SUPABASE_ANON_KEY: "sb_publishable_test_only" };
 const image = "https://images.example.invalid/artwork.webp";
@@ -136,4 +145,114 @@ test("transient HTTP errors have only two retries", async () => {
   let calls = 0;
   await assert.rejects(runPublicHealth({ env, fetchImpl: async () => { calls++; return new Response(null, { status: 503 }); }, skipMedia: true, log: () => {} }), /HTTP 503/);
   assert.equal(calls, 3);
+});
+
+test("429 and server errors use exponential backoff, then succeed or fail closed", async () => {
+  for (const status of [429, 503]) {
+    for (const recover of [false, true]) {
+      const clock = fastClock();
+      const starts = [];
+      const request = createPublicRequest({ ...clock, fetchImpl: async () => {
+        starts.push(clock.now());
+        return new Response(null, { status: recover && starts.length === 3 ? 200 : status });
+      } });
+      if (recover) assert.equal((await request(image, { method: "HEAD" })).status, 200);
+      else await assert.rejects(request(image, { method: "HEAD" }), new RegExp(`HTTP ${status}`));
+      assert.deepEqual(starts.map((time) => time - starts[0]), [0, 1_000, 3_000]);
+      assert.deepEqual(clock.sleeps, [1_000, 2_000]);
+    }
+  }
+});
+
+test("Retry-After seconds and HTTP dates are honored; invalid or past values use backoff", async () => {
+  for (const header of ["3", "Tue, 08 Sep 2026 00:00:03 GMT", "invalid", "-1", "Mon, 07 Sep 2026 00:00:00 GMT"]) {
+    const clock = fastClock();
+    let calls = 0;
+    const request = createPublicRequest({ ...clock, fetchImpl: async () => new Response(null, {
+      status: ++calls === 1 ? 429 : 200, headers: { "retry-after": header },
+    }) });
+    assert.equal((await request(image, { method: "HEAD" })).status, 200);
+    assert.deepEqual(clock.sleeps, [header === "3" || header.startsWith("Tue,") ? 3_000 : 1_000]);
+  }
+});
+
+test("Retry-After beyond the global budget never causes an early retry", async () => {
+  const clock = fastClock();
+  let calls = 0;
+  const request = createPublicRequest({ ...clock, fetchImpl: async () => {
+    calls++;
+    return new Response(null, { status: 429, headers: { "retry-after": "241" } });
+  } });
+  await assert.rejects(request(image), /espera requerida supera.*cuatro minutos/);
+  assert.equal(calls, 1);
+  assert.deepEqual(clock.sleeps, []);
+});
+
+test("non-retryable HTTP failures are preserved and HEAD 501 still falls back to GET Range", async () => {
+  for (const status of [403, 404]) {
+    let calls = 0;
+    const request = createPublicRequest({ ...fastClock(), fetchImpl: async () => { calls++; return new Response(null, { status }); } });
+    await assert.rejects(checkMedia(image, request), new RegExp(`HTTP ${status}`));
+    assert.equal(calls, 1);
+  }
+  const calls = [];
+  const request = createPublicRequest({ ...fastClock(), fetchImpl: async (_url, init) => {
+    calls.push(init);
+    return init.method === "HEAD" ? new Response(null, { status: 501 }) : new Response("image", { status: 206, headers: { "content-type": "image/webp" } });
+  } });
+  await checkMedia(image, request);
+  assert.deepEqual(calls.map(({ method, headers }) => ({ method, headers })), [
+    { method: "HEAD", headers: undefined }, { method: "GET", headers: { Range: "bytes=0-63" } },
+  ]);
+});
+
+test("requests share origin pacing and a 429 cooldown without blocking another origin", async () => {
+  let time = Date.UTC(2026, 8, 8);
+  const initial = time;
+  const waits = [];
+  const calls = [];
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const request = createPublicRequest({
+    now: () => time,
+    sleep: (ms) => new Promise((resolve) => waits.push({ at: time + ms, resolve })),
+    fetchImpl: async (url) => {
+      calls.push({ url, at: time - initial });
+      return calls.length === 1 ? new Response(null, { status: 429, headers: { "retry-after": "2" } }) : new Response(null);
+    },
+  });
+  const first = request(image);
+  await flush();
+  const second = request(`${image}?second`);
+  const otherOrigin = request("https://other.example.invalid/image.webp");
+  await flush();
+  assert.deepEqual(calls.map(({ at }) => at), [0, 0]);
+  const advance = async (ms) => {
+    time += ms;
+    const due = waits.filter(({ at }) => at <= time);
+    due.forEach((wait) => { waits.splice(waits.indexOf(wait), 1); wait.resolve(); });
+    await flush();
+  };
+  await advance(1_999);
+  assert.equal(calls.length, 2, "Queued workers must not send during the shared cooldown.");
+  await advance(1);
+  assert.deepEqual(calls[2], { url: image, at: 2_000 });
+  await advance(249);
+  assert.equal(calls.length, 3);
+  await advance(1);
+  assert.deepEqual(calls[3], { url: `${image}?second`, at: 2_250 });
+  await Promise.all([first, second, otherOrigin]);
+});
+
+test("deadline abort cancels pending backoff and fetch receives the abort signal", async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  let fetchSignal;
+  const request = createPublicRequest({
+    deadline: controller.signal,
+    fetchImpl: async (_url, init) => { calls++; fetchSignal = init.signal; return new Response(null, { status: 429 }); },
+    sleep: async (_ms, signal) => { assert.equal(signal, controller.signal); controller.abort(); signal.throwIfAborted(); },
+  });
+  await assert.rejects(request(image), /límite de cuatro minutos/);
+  assert.equal(calls, 1);
+  assert.equal(fetchSignal.aborted, true);
 });
