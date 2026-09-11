@@ -115,6 +115,22 @@ El workflow reutilizable [quality.yml](.github/workflows/quality.yml) ejecuta la
 
 GitHub sólo necesita los secretos `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` para la comprobación pública y el build. Las pruebas de edición usan credenciales locales efímeras: no añadas la clave de servicio de producción a Actions.
 
+### Publicación en edge-proxy
+
+La web se sirve en [https://tonicrespo.duckdns.org](https://tonicrespo.duckdns.org). GitHub Pages conserva su build independiente con base `/ToniCrespoWEB/`.
+
+Cada push a `main` ejecuta el mismo workflow de despliegue. Después de superar Quality y la comprobación pública, el job `publish-edge` compila con `VITE_BASE_PATH=/` y publica una release `edge-<SHA completo del commit>` con tres archivos:
+
+- `site.tar.gz`: contenido compilado de `dist/`, con `index.html` en la raíz del paquete.
+- `site.tar.gz.sha256`: checksum SHA-256 del paquete.
+- `release.json`: sitio, repositorio, commit, ejecución de Actions, base y checksum esperados.
+
+El workflow usa el `GITHUB_TOKEN` temporal del propio repositorio para publicar. Repetir una ejecución valida la release existente del mismo commit y conserva sus archivos; nunca los sobreescribe. Para publicar una nueva compilación, crea un nuevo commit.
+
+El LXC `edge-proxy` consulta periódicamente las releases públicas y sólo despliega las que superan la validación de origen, commit, checksum y ejecución correcta del workflow. Descarga los archivos compilados y cambia la versión activa de forma atómica; Caddy sirve las rutas React con fallback a `index.html`. La configuración de dominio, el instalador y el servicio de consulta viven en [MartinMarch/edge-proxy](https://github.com/MartinMarch/edge-proxy).
+
+Este flujo no requiere una conexión SSH entrante desde GitHub, credenciales de GitHub permanentes en el LXC ni un runner de Actions dentro de producción. Los secretos DuckDNS y los certificados permanecen en el servidor.
+
 ## Rutas
 
 - `/`

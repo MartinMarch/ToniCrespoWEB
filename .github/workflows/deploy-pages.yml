@@ -73,3 +73,109 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  publish-edge:
+    name: Publish edge-proxy release
+    if: github.ref == 'refs/heads/main'
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check live Supabase, contact address and published images (read-only)
+        run: npm run test:public-health
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Build for the root domain
+        run: npm run build
+        env:
+          VITE_BASE_PATH: /
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Package static files and deployment metadata
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+            -czf site.tar.gz -C dist .
+          sha256sum site.tar.gz > site.tar.gz.sha256
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = {
+              "schema": 1,
+              "site": "tonicrespo",
+              "repository": "MartinMarch/ToniCrespoWEB",
+              "commit": os.environ["GITHUB_SHA"],
+              "run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "workflow": "deploy-pages.yml",
+              "archive": "site.tar.gz",
+              "sha256": hashlib.sha256(Path("site.tar.gz").read_bytes()).hexdigest(),
+              "base_path": "/",
+          }
+          Path("release.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+
+      - name: Publish once per commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release_tag="edge-${GITHUB_SHA}"
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease > existing-release.json; then
+            release_commit="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${release_tag}" --jq .sha)"
+            test "$release_commit" = "$GITHUB_SHA"
+            export EXISTING_RELEASE_DIR
+            EXISTING_RELEASE_DIR="$(mktemp -d)"
+            gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" \
+              --dir "$EXISTING_RELEASE_DIR" \
+              --pattern site.tar.gz --pattern site.tar.gz.sha256 --pattern release.json
+            (cd "$EXISTING_RELEASE_DIR" && sha256sum --check site.tar.gz.sha256)
+            python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          release = json.loads(Path("existing-release.json").read_text())
+          if release["isDraft"] or release["isPrerelease"]:
+              raise SystemExit("Existing edge release must be published and not a prerelease")
+          directory = Path(os.environ["EXISTING_RELEASE_DIR"])
+          existing = json.loads((directory / "release.json").read_text())
+          expected = json.loads(Path("release.json").read_text())
+          for field in ("schema", "site", "repository", "commit", "workflow", "archive", "base_path"):
+              if existing.get(field) != expected[field]:
+                  raise SystemExit(f"Existing release has unexpected {field}; refusing to overwrite")
+          digest = hashlib.sha256((directory / "site.tar.gz").read_bytes()).hexdigest()
+          if existing.get("sha256") != digest:
+              raise SystemExit("Existing release archive does not match its manifest")
+          if type(existing.get("run_id")) is not int or existing["run_id"] <= 0:
+              raise SystemExit("Existing release has no valid workflow run")
+          PY
+            echo "Validated existing ${release_tag}; keeping its original assets."
+            exit 0
+          fi
+          gh release create "$release_tag" site.tar.gz site.tar.gz.sha256 release.json \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "edge-proxy ${GITHUB_SHA}" --latest \
+            --notes "Static root-domain build for tonicrespo.duckdns.org, produced after required quality and public-health checks."
