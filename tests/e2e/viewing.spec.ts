@@ -14,6 +14,46 @@ async function loadedImage(image: Locator) {
   await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)).toBe(true);
 }
 
+async function measureLanding(page: Page) {
+  return page.evaluate(() => {
+    const bounds = (element: Element) => {
+      const box = element.getBoundingClientRect();
+      return { x: box.x, y: box.y, width: box.width, height: box.height, right: box.right, bottom: box.bottom };
+    };
+    const section = document.querySelector('.portfolio-entry-section')!;
+    return {
+      scrollY, header: bounds(document.querySelector('.site-header')!), section: bounds(section),
+      grid: bounds(section.querySelector('.support-landing-grid')!),
+      gridGap: Number.parseFloat(getComputedStyle(section.querySelector('.support-landing-grid')!).columnGap),
+      gridRowGap: Number.parseFloat(getComputedStyle(section.querySelector('.support-landing-grid')!).rowGap),
+      cards: [...section.querySelectorAll('.support-landing-card')].map((card) => ({
+        card: bounds(card), image: bounds(card.querySelector('.support-landing-card__image')!),
+        title: bounds(card.querySelector('.support-landing-card__title')!),
+        imageSource: (card.querySelector('img') as HTMLImageElement).currentSrc,
+        imageAlt: card.querySelector('img')!.getAttribute('alt'),
+        titleText: card.querySelector('.support-landing-card__title')!.textContent!.trim(),
+        href: card.getAttribute('href'),
+      })),
+    };
+  });
+}
+
+function previousDesktopLandingSide(width: number, height: number) {
+  // Historical shared layout, intentionally independent of the new portfolio CSS:
+  // section min(980px, 108svh), page padding clamp(22px, 4vw, 64px),
+  // two equal columns separated by clamp(34px, 5vw, 66px).
+  const section = Math.min(width, 980, height * 1.08);
+  const padding = Math.min(64, Math.max(22, width * .04));
+  const gap = Math.min(66, Math.max(34, width * .05));
+  return (section - padding * 2 - gap) / 2;
+}
+
+const desktopLandingViewports = [
+  { width: 1024, height: 768 }, { width: 1280, height: 720 }, { width: 1366, height: 768 },
+  { width: 1440, height: 900 }, { width: 1920, height: 1080 }, { width: 1440, height: 600 },
+  { width: 2560, height: 720 },
+];
+
 async function headerNavigation(page: Page, name: string) {
   await page.evaluate(() => window.scrollTo(0, 0));
   const toggle = page.locator('.header-menu-trigger');
@@ -112,7 +152,12 @@ test('header and footer retain readable fonts, keyboard access and separate layo
     expect(layout.brand.left).toBeGreaterThanOrEqual(0);
     expect(layout.brand.right).toBeLessThanOrEqual(layout.socials.left + 1);
     expect(layout.socials.right).toBeLessThanOrEqual(width + 1);
-    expect(layout.logoOffset).toBeGreaterThanOrEqual(12);
+    if (width <= 820) {
+      expect(layout.logoOffset).toBe(0);
+      expect(Math.abs(layout.brand.left + layout.brand.width / 2 - width / 2)).toBeLessThan(1);
+    } else {
+      expect(layout.logoOffset).toBeGreaterThanOrEqual(12);
+    }
     if (layout.navVisible) {
       expect(layout.brand.right).toBeLessThanOrEqual(layout.nav.left + 1);
       expect(layout.nav.right).toBeLessThanOrEqual(layout.socials.left + 1);
@@ -133,7 +178,7 @@ test('header and footer retain readable fonts, keyboard access and separate layo
   expect(button.height).toBeGreaterThanOrEqual(24);
 });
 
-test('home squares, italic quotation, centered copyright and continuous footer gradient', async ({ page }, testInfo) => {
+test('home squares and italic quotation retain their layout above a white footer with centered copyright', async ({ page }, testInfo) => {
   await spanish(page);
   await page.goto('/');
   const covers = page.locator('.support-landing-card__image');
@@ -151,7 +196,7 @@ test('home squares, italic quotation, centered copyright and continuous footer g
   await expect(page.locator('.home-statement-section h4').last()).toHaveCSS('text-align', 'right');
   const footer = page.locator('.site-footer');
   await footer.scrollIntoViewIfNeeded();
-  await expect(footer).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(footer).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(footer).toHaveCSS('border-top-width', '0px');
   await expect(page.locator('.site-footer__bottom')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(page.locator('.app-shell')).toHaveCSS('background-image', /linear-gradient/);
@@ -171,6 +216,224 @@ test('home squares, italic quotation, centered copyright and continuous footer g
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(page.locator('.site-header')).not.toHaveClass(/site-header--hidden/);
   await page.screenshot({ path: testInfo.outputPath('home-footer.png'), fullPage: true });
+});
+
+test('larger desktop portfolio squares and both titles fit the initial viewport on home and work after fresh loads and resizes', async ({ page }, testInfo) => {
+  await spanish(page);
+  const layouts: { path: string; phase: string; viewport: typeof desktopLandingViewports[number]; layout: Awaited<ReturnType<typeof measureLanding>> }[] = [];
+  for (const path of ['/', '/obra']) {
+    for (const phase of ['fresh', 'resize']) {
+      for (const viewport of desktopLandingViewports) {
+        await page.setViewportSize(viewport);
+        if (phase === 'fresh') await page.goto(path);
+        const cards = page.locator('.support-landing-card');
+        await expect(cards).toHaveCount(2);
+        for (const card of await cards.all()) {
+          await loadedImage(card.locator('img'));
+          await expect(card).toBeInViewport({ ratio: 1 });
+          await expect(card.locator('.support-landing-card__title')).toBeInViewport({ ratio: 1 });
+        }
+        const layout = await measureLanding(page);
+        layouts.push({ path, phase, viewport, layout });
+        expect(layout.scrollY).toBe(0);
+        expect(layout.cards).toHaveLength(2);
+        expect(layout.gridGap).toBeGreaterThanOrEqual(34);
+        const [first, second] = layout.cards;
+        expect(second.image.x - first.image.right).toBeGreaterThanOrEqual(34);
+        expect(Math.abs(first.image.y - second.image.y)).toBeLessThan(1);
+        expect(Math.abs(first.image.width - second.image.width)).toBeLessThan(1);
+        for (const { card, image, title } of layout.cards) {
+          expect(Math.abs(image.width - image.height)).toBeLessThan(1);
+          expect(image.width).toBeGreaterThan(previousDesktopLandingSide(viewport.width, viewport.height) + 1);
+          expect(card.y - layout.header.bottom).toBeGreaterThanOrEqual(18);
+          expect(card.x).toBeGreaterThanOrEqual(18);
+          expect(card.right).toBeLessThanOrEqual(viewport.width - 18);
+          expect(card.bottom).toBeLessThanOrEqual(viewport.height - 18);
+          expect(title.y - image.bottom).toBeGreaterThanOrEqual(18);
+          expect(title.bottom).toBeLessThanOrEqual(viewport.height - 18);
+        }
+        await expect(cards.nth(0)).toHaveAttribute('href', '/lienzos');
+        await expect(cards.nth(1)).toHaveAttribute('href', '/laminas');
+        await expect(cards.nth(0).locator('.support-landing-card__title')).toHaveText('Lienzos');
+        await expect(cards.nth(1).locator('.support-landing-card__title')).toHaveText('Obra en papel');
+        await expect(page.locator('.home-statement-section')).toHaveCount(path === '/' ? 1 : 0);
+        await noOverflow(page);
+        if (phase === 'fresh' && [900, 600].includes(viewport.height)) {
+          await page.screenshot({ path: testInfo.outputPath(`${path === '/' ? 'home' : 'work'}-squares-${viewport.width}x${viewport.height}.png`) });
+        }
+      }
+    }
+  }
+  await testInfo.attach('desktop-portfolio-landing-layout', { body: JSON.stringify(layouts, null, 2), contentType: 'application/json' });
+});
+
+test('home and work share exactly the same cover content and layout across mobile and desktop viewports', async ({ page }) => {
+  await spanish(page);
+  for (const viewport of [
+    { width: 320, height: 844 }, { width: 390, height: 844 }, { width: 820, height: 844 },
+    ...desktopLandingViewports,
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/obra');
+    await expect(page.locator('.support-landing-card')).toHaveCount(2);
+    for (const card of await page.locator('.support-landing-card').all()) await loadedImage(card.locator('img'));
+    await expect(page.locator('.home-statement-section')).toHaveCount(0);
+    const work = await measureLanding(page);
+    await page.goto('/');
+    await expect(page.locator('.support-landing-card')).toHaveCount(2);
+    for (const card of await page.locator('.support-landing-card').all()) await loadedImage(card.locator('img'));
+    await expect(page.locator('.home-statement-section')).toHaveCount(1);
+    const home = await measureLanding(page);
+    expect(home.scrollY).toBe(0);
+    expect(work.scrollY).toBe(0);
+    expect(home.gridGap).toBeCloseTo(work.gridGap, 1);
+    expect(home.gridRowGap).toBeCloseTo(work.gridRowGap, 1);
+    for (const key of ['section', 'grid'] as const) {
+      for (const dimension of ['x', 'y', 'width', 'height'] as const) {
+        expect(Math.abs(home[key][dimension] - work[key][dimension])).toBeLessThan(1);
+      }
+    }
+    for (const index of [0, 1]) {
+      for (const key of ['imageSource', 'imageAlt', 'titleText', 'href'] as const) {
+        expect(home.cards[index][key]).toBe(work.cards[index][key]);
+      }
+      for (const key of ['card', 'image', 'title'] as const) {
+        for (const dimension of ['x', 'y', 'width', 'height'] as const) {
+          expect(Math.abs(home.cards[index][key][dimension] - work.cards[index][key][dimension])).toBeLessThan(1);
+        }
+      }
+    }
+    await noOverflow(page);
+  }
+});
+
+test('a single compact white footer preserves centered branding and translated baseline, contact links and comfortable controls at responsive widths', async ({ page, backend }, testInfo) => {
+  await spanish(page);
+  await page.goto('/');
+  await expect(page.locator('.support-landing-card')).toHaveCount(2);
+  const footer = page.locator('.site-footer');
+  const contacts = footer.locator('.site-footer__contact a');
+  const editor = footer.getByRole('button', { name: 'Edición web', exact: true });
+  const touchPointer = await page.evaluate(() => matchMedia('(pointer: coarse)').matches);
+  const measurements: { width: number; footerHeight: number; logoWidth: number; touchPointer: boolean }[] = [];
+  const baselineMeasurements: { width: number; language: string; lineCount: number; centers: number[] }[] = [];
+  for (const width of [320, 390, 820, 821, 1024, 1440, 2560]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await footer.scrollIntoViewIfNeeded();
+    await expect(page.getByRole('contentinfo')).toHaveCount(1);
+    await expect(footer).toHaveCount(1);
+    await expect(footer.locator('.site-footer__inner, .site-footer__bottom')).toHaveCount(2);
+    await expect(footer.locator('.site-footer__nav')).toHaveCount(0);
+    await expect(footer).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(footer).toHaveCSS('background-image', 'none');
+    await expect(footer.locator('.site-footer__bottom')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(page.locator('.app-shell')).toHaveCSS('background-image', /linear-gradient/);
+    const footerBounds = (await footer.boundingBox())!;
+    const logoBounds = (await footer.locator('.toni-crespo-logo').boundingBox())!;
+    expect(footerBounds.x).toBeGreaterThanOrEqual(0);
+    expect(footerBounds.x + footerBounds.width).toBeLessThanOrEqual(width);
+    // Coarse-pointer tablets keep 44px controls even in a desktop layout.
+    expect(footerBounds.height).toBeLessThanOrEqual(width <= 820 ? 340 : touchPointer ? 240 : 210);
+    expect(logoBounds.width).toBeGreaterThanOrEqual(128);
+    expect(logoBounds.width).toBeLessThanOrEqual(160);
+    measurements.push({ width, footerHeight: footerBounds.height, logoWidth: logoBounds.width, touchPointer });
+    const centers = await footer.locator('.site-footer__logo, .site-footer__brand-block > p, .site-footer__copyright, .site-footer__legal > span').evaluateAll((elements) => elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      return box.x + box.width / 2;
+    }));
+    expect(centers).toHaveLength(4);
+    expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(1);
+    await expect(footer.locator('.site-footer__brand-block > p')).toHaveText('Mallorca');
+    await expect(footer.locator('.site-footer__copyright')).toHaveText('© 2026 Toni Crespo');
+    await expect(contacts).toHaveCount(3);
+    await expect(contacts.nth(0)).toHaveAttribute('href', 'mailto:studio@example.test');
+    await expect(contacts.nth(1)).toHaveAttribute('href', 'tel:+34600111222');
+    await expect(contacts.nth(2)).toHaveAttribute('href', 'https://www.instagram.com/toni.fixture/');
+    for (const control of [...await contacts.all(), editor]) {
+      await expect(control).toBeVisible();
+      const bounds = (await control.boundingBox())!;
+      expect(bounds.height).toBeGreaterThanOrEqual(touchPointer ? 44 : 32);
+      expect(bounds.width).toBeGreaterThanOrEqual(44);
+      expect(bounds.x).toBeGreaterThanOrEqual(footerBounds.x);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(footerBounds.x + footerBounds.width);
+    }
+    if (touchPointer) expect((await footer.locator('.site-footer__logo').boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    for (const contact of await contacts.all()) await expect(contact).toHaveCSS('font-size', '14px');
+    await noOverflow(page);
+    for (const [language, baseline] of [
+      ['Español', 'Obra original y obra en papel'],
+      ['Català', 'Obra original i obra en paper'],
+      ['English', 'Original works and works on paper'],
+      ['Deutsch', 'Originalwerke und Arbeiten auf Papier'],
+    ]) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect(page.locator('.site-header')).not.toHaveClass(/site-header--hidden/);
+      await page.locator('.header-language__trigger').click();
+      await page.getByRole('menuitemradio', { name: new RegExp(`^${language}`) }).click();
+      await expect(footer.locator('.site-footer__legal > span')).toHaveText(baseline);
+      await footer.scrollIntoViewIfNeeded();
+      await expect(footer.locator('.site-footer__legal')).toHaveCSS('text-align', 'center');
+      const alignment = await footer.evaluate((element) => {
+        const center = (item: Element) => { const box = item.getBoundingClientRect(); return box.left + box.width / 2; };
+        const label = element.querySelector('.site-footer__legal > span')!;
+        const range = document.createRange();
+        range.selectNodeContents(label);
+        const lines = [...range.getClientRects()].filter((line) => line.width > 0);
+        return {
+          centers: [...element.querySelectorAll('.site-footer__logo, .site-footer__brand-block > p, .site-footer__copyright, .site-footer__legal > span')].map(center),
+          lineCenters: lines.map((line) => line.left + line.width / 2),
+          overflow: element.scrollWidth - element.clientWidth,
+        };
+      });
+      expect(alignment.centers).toHaveLength(4);
+      expect(Math.max(...alignment.centers) - Math.min(...alignment.centers)).toBeLessThan(1);
+      // Check actual text lines too: a full-width box alone can conceal
+      // left-aligned text when a translation wraps onto more than one line.
+      expect(alignment.lineCenters.length).toBeGreaterThan(0);
+      for (const lineCenter of alignment.lineCenters) expect(Math.abs(lineCenter - alignment.centers[0])).toBeLessThan(1);
+      expect(alignment.overflow).toBeLessThanOrEqual(1);
+      await noOverflow(page);
+      baselineMeasurements.push({ width, language, lineCount: alignment.lineCenters.length, centers: alignment.centers });
+    }
+    if ([320, 1440].includes(width)) await footer.screenshot({ path: testInfo.outputPath(`footer-${width}.png`) });
+  }
+  await testInfo.attach('compact-footer-layout', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' });
+  expect(baselineMeasurements.some((measurement) => measurement.lineCount > 1)).toBe(true);
+  await testInfo.attach('translated-footer-baseline', { body: JSON.stringify(baselineMeasurements, null, 2), contentType: 'application/json' });
+  await editor.focus();
+  await expect(editor).toBeFocused();
+  await page.keyboard.press('Enter');
+  const login = page.getByRole('dialog', { name: 'Inicio de sesión de edición', exact: true });
+  await expect(login).toBeVisible();
+  await login.getByRole('button', { name: 'Cerrar inicio de sesión', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(login).toBeHidden();
+  await expect(footer).toHaveCount(1);
+  expect(backend.requests.filter((request) => !['GET', 'HEAD'].includes(request.method))).toEqual([]);
+});
+
+test('the home quotation is larger on phones and desktop while preserving its font, italics and separate attribution', async ({ page }) => {
+  await spanish(page);
+  await page.goto('/');
+  const quote = page.locator('.home-statement-section h4').first();
+  const attribution = page.locator('.home-statement-section h4').last();
+  for (const width of [320, 390, 700, 701, 820, 821, 1024, 1280, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const expectedSize = Math.min(30, Math.max(22, width * .021));
+    await expect(quote).toHaveCSS('font-size', `${Number(expectedSize.toFixed(4))}px`);
+    await expect(quote).toHaveCSS('font-style', /italic|oblique/);
+    await expect(quote).toHaveCSS('text-align', 'justify');
+    await expect(attribution).toHaveCSS('text-align', 'right');
+    const fonts = await page.locator('.home-statement-section h4').evaluateAll((elements) => elements.map((element) => ({
+      family: getComputedStyle(element).fontFamily, size: Number.parseFloat(getComputedStyle(element).fontSize),
+    })));
+    expect(fonts[0].family).toContain('Manrope');
+    expect(fonts[1].family).toBe(fonts[0].family);
+    expect(fonts[1].size).toBeGreaterThanOrEqual(15);
+    expect(fonts[1].size).toBeLessThanOrEqual(18);
+    expect(fonts[1].size).toBeLessThan(fonts[0].size);
+    await noOverflow(page);
+  }
 });
 
 test('collections have dynamic frameless previews and a genuine empty state without overlapping neighboring cards', async ({ page, isMobile }) => {
@@ -344,6 +607,7 @@ test('news combine date, search and category filters, clear them and open images
   await page.goto('/noticias');
   const cards = page.locator('.news-card');
   await expect(cards).toHaveCount(2);
+  await page.getByRole('button', { name: 'Filtros', exact: true }).click();
   await page.getByLabel('Desde', { exact: true }).fill('2026-01-01');
   await expect(cards).toHaveCount(1);
   await expect(cards.first()).toContainText('Exposición de primavera');

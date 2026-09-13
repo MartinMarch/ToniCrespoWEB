@@ -17,6 +17,8 @@ export type CurrentArtwork = {
   height: number | null;
   sortOrder: number;
   isPublished: boolean;
+  /** Missing on older data and photographs: available unless explicitly false. */
+  isAvailable?: boolean;
   translations?: ArtworkTranslations | PhotographyTranslations;
 };
 

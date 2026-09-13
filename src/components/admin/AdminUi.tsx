@@ -1,4 +1,4 @@
-import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { LoaderCircle, X } from "lucide-react";
 
 type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -26,21 +26,50 @@ type AdminDialogProps = {
   children: ReactNode;
   onClose: () => void;
   className?: string;
+  isActive?: boolean;
+  closeDisabled?: boolean;
 };
 
-export function AdminDialog({ children, className, onClose, title }: AdminDialogProps) {
+export function AdminDialog({ children, className, onClose, title, isActive = true, closeDisabled = false }: AdminDialogProps) {
+  const panel = useRef<HTMLElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = closeDisabled ? () => undefined : onClose;
   useEffect(() => {
+    if (!isActive) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    panel.current?.focus();
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault(); event.stopPropagation(); closeRef.current();
+      }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(panel.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]',
+      ) ?? []).filter((element) => element.getClientRects().length > 0);
+      const first = controls[0]; const last = controls[controls.length - 1];
+      if (!first) { event.preventDefault(); panel.current?.focus(); }
+      else if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.current)) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus();
+      }
     }
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, true);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, [isActive]);
 
   return (
-    <div className="admin-dialog-backdrop" role="presentation" onMouseDown={onClose}>
+    <div className="admin-dialog-backdrop" role="presentation" hidden={!isActive} style={!isActive ? { display: "none" } : undefined} onMouseDown={closeDisabled ? undefined : onClose}>
       <section
+        ref={panel}
+        tabIndex={-1}
         className={`admin-dialog${className ? ` ${className}` : ""}`}
         role="dialog"
         aria-modal="true"
@@ -49,7 +78,7 @@ export function AdminDialog({ children, className, onClose, title }: AdminDialog
       >
         <header className="admin-dialog__header">
           <h2>{title}</h2>
-          <EditIconButton label="Cerrar" className="admin-dialog__close" onClick={onClose}>
+          <EditIconButton label="Cerrar" className="admin-dialog__close" onClick={onClose} disabled={closeDisabled}>
             <X aria-hidden="true" />
           </EditIconButton>
         </header>

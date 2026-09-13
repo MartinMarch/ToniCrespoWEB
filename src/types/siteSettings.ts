@@ -11,6 +11,12 @@ export type SiteContactSettings = {
 export type SiteSettings = {
   contact: SiteContactSettings;
   defaultLanguage: SiteLanguage;
+  gradient: SiteGradientSettings;
+};
+
+export type SiteGradientSettings = {
+  startColor: string;
+  endColor: string;
 };
 
 export const defaultSiteSettings: SiteSettings = {
@@ -22,4 +28,8 @@ export const defaultSiteSettings: SiteSettings = {
     phoneNumber: "34659959352",
   },
   defaultLanguage: "ca",
+  gradient: {
+    startColor: "#d4d0c3",
+    endColor: "#77756f",
+  },
 };

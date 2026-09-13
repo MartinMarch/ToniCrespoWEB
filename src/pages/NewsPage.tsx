@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { ArrowUpRight, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useAdminSession } from "../app/adminSession";
 import { useEditableContent, useEditableNewsItems, useEditingContent } from "../app/editableContent";
 import { useSitePreferences } from "../app/sitePreferences";
 import { NewsEditorDialog } from "../components/admin/ContentEditorDialogs";
 import { ConfirmDialog, EditIconButton } from "../components/admin/AdminUi";
 import { LoadingImage, PageLoader } from "../components/ui/Loaders";
-import { deleteNewsItem, getEditableOperationErrorMessage } from "../services/editableContentService";
+import { NewsCarousel } from "../components/news/NewsCarousel";
+import { getNewsDate, getNewsExternalUrl, getNewsImages, newsCategoryLabels, newsCategoryValues, newsCopy, normalizeNewsSearch } from "../lib/newsPresentation";
+import { deleteNewsItem, getEditableOperationErrorMessage, loadEditableContent } from "../services/editableContentService";
 import type { NewsImage, NewsItem } from "../types/domain";
+import "../styles/news-feed.css";
 
 export function NewsPage() {
   const { labels, language } = useSitePreferences();
@@ -19,44 +22,37 @@ export function NewsPage() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [category, setCategory] = useState<NewsItem["category"] | "all">("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersId = useId();
+  const copy = newsCopy[language];
   const [activeImage, setActiveImage] = useState<NewsImage | null>(null);
   const [isNewsEditorOpen, setIsNewsEditorOpen] = useState(false);
   const [newsToEditId, setNewsToEditId] = useState<string | null>(null);
   const [newsToDeleteId, setNewsToDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
-  const normalizedSearch = useMemo(() => normalizeSearch(searchTerm), [searchTerm]);
+  const normalizedSearch = useMemo(() => normalizeNewsSearch(searchTerm), [searchTerm]);
   const filteredNews = useMemo(() => {
     return newsItems.filter((item) => {
-      const matchesSearch = !normalizedSearch || normalizeSearch(getSearchableNewsText(item)).includes(normalizedSearch);
+      const matchesSearch = !normalizedSearch || normalizeNewsSearch([item.title, item.dateText, newsCategoryLabels[language][item.category], item.location, item.description].filter(Boolean).join(" ")).includes(normalizedSearch);
       const matchesCategory = category === "all" || item.category === category;
       const matchesFrom = !fromDate || Boolean(item.publishedAt && item.publishedAt >= fromDate);
       const matchesTo = !toDate || Boolean(item.publishedAt && item.publishedAt <= toDate);
       return matchesSearch && matchesCategory && matchesFrom && matchesTo;
     });
-  }, [category, fromDate, newsItems, normalizedSearch, toDate]);
+  }, [category, fromDate, language, newsItems, normalizedSearch, toDate]);
   const hasActiveFilters = Boolean(searchTerm || fromDate || toDate || category !== "all");
-
-  useEffect(() => {
-    if (!activeImage) return;
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setActiveImage(null);
-      }
-    }
-
-    document.documentElement.classList.add("is-lightbox-open");
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.documentElement.classList.remove("is-lightbox-open");
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [activeImage]);
+  const extraFilterCount = Number(Boolean(fromDate)) + Number(Boolean(toDate)) + Number(category !== "all");
 
   const newsToDelete = newsToDeleteId ? newsItems.find((item) => item.id === newsToDeleteId) ?? null : null;
   const newsToEdit = newsToEditId ? editableNewsItems.find((item) => item.id === newsToEditId) ?? null : null;
+
+  async function refreshSavedNews() {
+    // Do not let a failed follow-up read erase the current feed or unmount the
+    // editing dialog. The editor must offer a read-only retry after a saved RPC.
+    const confirmedSnapshot = await loadEditableContent();
+    await refreshContent(confirmedSnapshot);
+  }
 
   async function handleDeleteNews() {
     const item = editableNewsItems.find((candidate) => candidate.id === newsToDeleteId);
@@ -80,13 +76,14 @@ export function NewsPage() {
 
   return (
     <>
-      <section className={`page-section news-page${isEditMode ? " is-editing" : ""}`}>
+      <section className={`page-section news-page news-page--feed${isEditMode ? " is-editing" : ""}`}>
         <div className="news-heading">
           <h1>{labels.nav.news}</h1>
         </div>
         {operationError ? <p className="editor-operation-feedback" role="alert">{operationError}</p> : null}
 
         <div className="news-filters" role="search">
+          <div className="news-filters__toolbar">
           <label className="news-search">
             <span className="editor-visually-hidden">{labels.actions.search}</span>
             <svg className="news-search__icon" aria-hidden="true" viewBox="0 0 24 24">
@@ -102,6 +99,12 @@ export function NewsPage() {
               onChange={(event) => setSearchTerm(event.target.value)}
             />
           </label>
+            <button type="button" className="news-filters__toggle" aria-label={copy.filters} aria-expanded={filtersOpen} aria-controls={filtersId} onClick={() => setFiltersOpen(open => !open)}>
+              <SlidersHorizontal aria-hidden="true" /><span>{copy.filters}</span>
+              {extraFilterCount > 0 ? <span className="news-filters__badge">{extraFilterCount}</span> : null}
+            </button>
+          </div>
+          <div className="news-filters__panel" id={filtersId} hidden={!filtersOpen}>
           <label className="news-filter-field">
             <span>{labels.newsFilters.from}</span>
             <input type="date" value={fromDate} max={toDate || undefined} onChange={(event) => setFromDate(event.target.value)} />
@@ -114,9 +117,13 @@ export function NewsPage() {
             <span>{labels.newsFilters.category}</span>
             <select value={category} onChange={(event) => setCategory(event.target.value as NewsItem["category"] | "all")}>
               <option value="all">{labels.newsFilters.allCategories}</option>
-              {newsCategoryValues.map((value) => <option key={value} value={value}>{getCategoryLabel(value, language)}</option>)}
+              {newsCategoryValues.map((value) => <option key={value} value={value}>{newsCategoryLabels[language][value]}</option>)}
             </select>
           </label>
+          </div>
+          {fromDate && toDate && fromDate > toDate ? <p className="news-filters__error" role="alert">{copy.dateRange}</p> : null}
+          <div className="news-filters__summary">
+            <span role="status" aria-atomic="true">{!isLoading ? `${filteredNews.length} ${filteredNews.length === 1 ? copy.result : copy.results}` : ""}</span>
           {hasActiveFilters ? (
             <button
               type="button"
@@ -131,6 +138,7 @@ export function NewsPage() {
               {labels.newsFilters.clear}
             </button>
           ) : null}
+          </div>
         </div>
 
         {isEditMode ? (
@@ -145,7 +153,7 @@ export function NewsPage() {
         {isLoading ? (
           <PageLoader variant="list" />
         ) : (
-          <div className="news-grid" aria-live="polite">
+          <div className="news-grid">
             {filteredNews.map((item) => (
               <NewsCard
                 key={item.id}
@@ -154,7 +162,6 @@ export function NewsPage() {
                 onEdit={() => setNewsToEditId(item.id)}
                 onDelete={() => setNewsToDeleteId(item.id)}
                 onImageSelect={setActiveImage}
-                visitLabel={labels.actions.visit}
               />
             ))}
           </div>
@@ -164,15 +171,12 @@ export function NewsPage() {
       </section>
 
       {activeImage ? (
-        <div className="photo-lightbox" role="dialog" aria-modal="true" onClick={() => setActiveImage(null)}>
-          <button type="button" className="photo-lightbox__close" aria-label={labels.actions.closeImage} />
-          <LoadingImage src={activeImage.url} alt={activeImage.alt ?? "Imagen de noticia"} onClick={(event) => event.stopPropagation()} />
-        </div>
+        <NewsImageDialog image={activeImage} onClose={() => setActiveImage(null)} />
       ) : null}
 
-      {isNewsEditorOpen ? <NewsEditorDialog onClose={() => setIsNewsEditorOpen(false)} onSaved={refreshContent} /> : null}
+      {isNewsEditorOpen ? <NewsEditorDialog onClose={() => setIsNewsEditorOpen(false)} onSaved={refreshSavedNews} /> : null}
 
-      {newsToEdit ? <NewsEditorDialog newsItem={newsToEdit} onClose={() => setNewsToEditId(null)} onSaved={refreshContent} /> : null}
+      {newsToEdit ? <NewsEditorDialog newsItem={newsToEdit} onClose={() => setNewsToEditId(null)} onSaved={refreshSavedNews} /> : null}
 
       {newsToDelete ? (
         <ConfirmDialog
@@ -187,38 +191,30 @@ export function NewsPage() {
   );
 }
 
-const newsCategoryValues: NewsItem["category"][] = ["exposicion", "premio", "entrevista", "publicacion", "evento", "television"];
-
-const categoryLabels: Record<string, Record<NewsItem["category"], string>> = {
-  es: { exposicion: "Exposición", premio: "Premio", entrevista: "Entrevista", publicacion: "Publicación", evento: "Evento", television: "Televisión" },
-  ca: { exposicion: "Exposició", premio: "Premi", entrevista: "Entrevista", publicacion: "Publicació", evento: "Esdeveniment", television: "Televisió" },
-  en: { exposicion: "Exhibition", premio: "Award", entrevista: "Interview", publicacion: "Publication", evento: "Event", television: "Television" },
-  de: { exposicion: "Ausstellung", premio: "Auszeichnung", entrevista: "Interview", publicacion: "Publikation", evento: "Veranstaltung", television: "Fernsehen" },
-};
-
-function getCategoryLabel(category: NewsItem["category"], language: string) {
-  return categoryLabels[language]?.[category] ?? categoryLabels.es[category];
-}
-
 function NewsCard({
   item,
   isEditing,
   onEdit,
   onDelete,
   onImageSelect,
-  visitLabel,
 }: {
   item: NewsItem;
   isEditing: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onImageSelect: (image: NewsImage) => void;
-  visitLabel: string;
 }) {
+  const { language } = useSitePreferences();
   const images = getNewsImages(item);
+  const externalUrl = getNewsExternalUrl(item.externalUrl);
+  const date = getNewsDate(item, language);
 
   return (
     <article className="news-card">
+      <header className="news-card__header">
+        <div className="news-card__identity"><span>Toni Crespo</span><span>{newsCategoryLabels[language][item.category]}</span></div>
+        {date ? <time className="news-card__date" dateTime={item.publishedAt || undefined}>{date}</time> : null}
+      </header>
       {isEditing ? (
         <>
           <EditIconButton className="news-card__edit" label={`Editar noticia: ${item.title}`} onClick={onEdit}>
@@ -229,15 +225,14 @@ function NewsCard({
           </EditIconButton>
         </>
       ) : null}
-      <NewsMedia images={images} title={item.title} onImageSelect={onImageSelect} />
+      <NewsCarousel images={images} title={item.title} onImageSelect={onImageSelect} />
       <div className="news-card__body">
-        <span className="news-card__date">{item.dateText}</span>
         <h2>{item.title}</h2>
         {item.location ? <p className="news-card__location">{item.location}</p> : null}
         {item.description ? <p className="news-card__description">{item.description}</p> : null}
-        {item.externalUrl ? (
-          <a className="news-card__link" href={item.externalUrl} target="_blank" rel="noreferrer">
-            {visitLabel}
+        {externalUrl ? (
+          <a className="news-card__link" href={externalUrl} target="_blank" rel="noopener noreferrer">
+            {newsCopy[language].visit}<ArrowUpRight aria-hidden="true" />
           </a>
         ) : null}
       </div>
@@ -245,63 +240,33 @@ function NewsCard({
   );
 }
 
-function NewsMedia({
-  images,
-  title,
-  onImageSelect,
-}: {
-  images: NewsImage[];
-  title: string;
-  onImageSelect: (image: NewsImage) => void;
-}) {
-  if (images.length === 0) {
-    return <div className="news-card__media news-card__media--empty" />;
-  }
-
-  const [primaryImage, ...secondaryImages] = images;
-
+function NewsImageDialog({ image, onClose }: { image: NewsImage; onClose: () => void }) {
+  const { language, labels } = useSitePreferences();
+  const close = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.classList.add("is-lightbox-open");
+    close.current?.focus();
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") { event.preventDefault(); closeRef.current(); }
+      if (event.key === "Tab") { event.preventDefault(); close.current?.focus(); }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.documentElement.classList.remove("is-lightbox-open");
+      document.removeEventListener("keydown", handleKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, []);
   return (
-    <div className={`news-card__media${images.length > 1 ? " news-card__media--gallery" : ""}`}>
-      <figure className="news-card__image news-card__image--primary">
-        <button type="button" className="news-card__zoom-button" onClick={() => onImageSelect(primaryImage)}>
-          <LoadingImage src={primaryImage.url} alt={primaryImage.alt ?? title} loading="lazy" />
-        </button>
-      </figure>
-      {secondaryImages.length > 0 ? (
-        <div className="news-card__thumbs" aria-label={`Más imágenes de ${title}`}>
-          {secondaryImages.slice(0, 3).map((image) => (
-            <figure key={image.url} className="news-card__image news-card__thumb">
-              <button type="button" className="news-card__zoom-button" onClick={() => onImageSelect(image)}>
-                <LoadingImage src={image.url} alt={image.alt ?? title} loading="lazy" />
-              </button>
-            </figure>
-          ))}
-        </div>
-      ) : null}
+    <div className="photo-lightbox news-lightbox" role="dialog" aria-modal="true" aria-label={image.alt?.trim() || newsCopy[language].gallery} onClick={onClose}>
+      <button ref={close} type="button" className="photo-lightbox__close" aria-label={labels.actions.closeImage} onClick={onClose} />
+      <LoadingImage src={image.url} alt={image.alt ?? newsCopy[language].gallery} onClick={(event) => event.stopPropagation()} />
     </div>
   );
-}
-
-function getNewsImages(item: NewsItem): NewsImage[] {
-  if (item.images?.length) return item.images;
-  if (!item.imageUrl) return [];
-
-  return [
-    {
-      url: item.imageUrl,
-      alt: item.imageAlt,
-    },
-  ];
-}
-
-function getSearchableNewsText(item: NewsItem) {
-  return [item.title, item.dateText, item.category, item.location, item.description].filter(Boolean).join(" ");
-}
-
-function normalizeSearch(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
 }

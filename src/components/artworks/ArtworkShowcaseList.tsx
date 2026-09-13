@@ -21,6 +21,7 @@ import { EditIconButton } from "../admin/AdminUi";
 import { LoadingImage } from "../ui/Loaders";
 import type { CurrentArtwork } from "../../types/currentSite";
 import { ArtworkDimensions } from "./ArtworkDimensions";
+import { ArtworkAvailability } from "./ArtworkAvailability";
 
 type ArtworkShowcaseListProps = {
   artworks: CurrentArtwork[];
@@ -233,6 +234,7 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
           </div>
           <div className="artwork-lightbox__caption" onClick={(event) => event.stopPropagation()}>
             <h2>{activeArtwork.title}</h2>
+            <ArtworkAvailability isAvailable={activeArtwork.isAvailable} />
             {activeArtwork.technique ? <p>{activeArtwork.technique}</p> : null}
             {activeArtwork.dimensions ? <ArtworkDimensions value={activeArtwork.dimensions} /> : null}
             <ArtworkEditorialText artwork={activeArtwork} />
@@ -247,6 +249,7 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
             <div className="artwork-mockup-lightbox__heading">
               <span>{labels.actions.mockups}</span>
               <h2 id={mockupTitleId}>{activeMockupArtwork.title}</h2>
+              <ArtworkAvailability isAvailable={activeMockupArtwork.isAvailable} />
               {activeMockupArtwork.dimensions ? <ArtworkDimensions value={activeMockupArtwork.dimensions} /> : null}
             </div>
             <div className="artwork-mockup-carousel">
@@ -421,6 +424,7 @@ function ArtworkShowcase({
         <div className="artwork-showcase__meta">
         {!artwork.isPublished ? <span className="artwork-showcase__visibility-label">Oculta al público</span> : null}
         <h2>{artwork.title}</h2>
+        <ArtworkAvailability isAvailable={artwork.isAvailable} />
         {artwork.technique ? <p>{artwork.technique}</p> : null}
         {artwork.dimensions ? <ArtworkDimensions value={artwork.dimensions} /> : null}
         <ArtworkEditorialText artwork={artwork} />
@@ -439,7 +443,7 @@ function ArtworkShowcase({
             <span>{labels.actions.mockups}</span>
           </button>
           <button type="button" className="artwork-interest-button" onClick={() => openArtworkContact(artwork)}>
-            {labels.actions.interest}
+            {artwork.isAvailable === false ? labels.actions.inquire : labels.actions.interest}
           </button>
         </div>
         </div>

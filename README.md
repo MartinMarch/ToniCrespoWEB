@@ -111,13 +111,15 @@ npm run test:public-health
 
 La comprobación pública valida el contenido, las imágenes reales y el formato del correo de contacto con la clave anónima. No invoca servicios de envío. La opción `--require-email-function` se conserva exclusivamente para diagnosticar la antigua función Resend: no forma parte del flujo activo ni del despliegue.
 
-El workflow reutilizable [quality.yml](.github/workflows/quality.yml) ejecuta las pruebas del frontend y el Supabase temporal en paralelo. [deploy-pages.yml](.github/workflows/deploy-pages.yml) lo invoca para el mismo commit de `main` y espera su éxito antes de comprobar el Supabase público, compilar y publicar. Cualquier fallo bloquea el despliegue. Las PR y otras ramas ejecutan Quality sin publicar.
+El workflow reutilizable [quality.yml](.github/workflows/quality.yml) ejecuta las pruebas del frontend y el Supabase temporal en paralelo. [Deploy edge-proxy](.github/workflows/deploy-pages.yml) lo invoca para el mismo commit de `main` y espera su éxito antes de comprobar el Supabase público, compilar y publicar la release para el edge. Cualquier fallo bloquea la publicación. Las PR y otras ramas ejecutan Quality sin publicar.
 
 GitHub sólo necesita los secretos `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` para la comprobación pública y el build. Las pruebas de edición usan credenciales locales efímeras: no añadas la clave de servicio de producción a Actions.
 
 ### Publicación en edge-proxy
 
-La web se sirve en [https://tonicrespo.duckdns.org](https://tonicrespo.duckdns.org). GitHub Pages conserva su build independiente con base `/ToniCrespoWEB/`.
+El único destino de despliegue es el edge-proxy, que sirve la web en [https://tonicrespo.duckdns.org](https://tonicrespo.duckdns.org). Ya no se compila ni publica para GitHub Pages; el workflow tampoco solicita permisos de Pages ni OIDC.
+
+El nombre visible del workflow es `Deploy edge-proxy`. Se conserva el archivo `deploy-pages.yml` y ese mismo identificador en `release.json` para mantener la compatibilidad con la validación del consumidor del edge. Renombrarlo requiere actualizar también esa configuración en el servidor.
 
 Cada push a `main` ejecuta el mismo workflow de despliegue. Después de superar Quality y la comprobación pública, el job `publish-edge` compila con `VITE_BASE_PATH=/` y publica una release `edge-<SHA completo del commit>` con tres archivos:
 
@@ -130,6 +132,26 @@ El workflow usa el `GITHUB_TOKEN` temporal del propio repositorio para publicar.
 El LXC `edge-proxy` consulta periódicamente las releases públicas y sólo despliega las que superan la validación de origen, commit, checksum y ejecución correcta del workflow. Descarga los archivos compilados y cambia la versión activa de forma atómica; Caddy sirve las rutas React con fallback a `index.html`. La configuración de dominio, el instalador y el servicio de consulta viven en [MartinMarch/edge-proxy](https://github.com/MartinMarch/edge-proxy).
 
 Este flujo no requiere una conexión SSH entrante desde GitHub, credenciales de GitHub permanentes en el LXC ni un runner de Actions dentro de producción. Los secretos DuckDNS y los certificados permanecen en el servidor.
+
+Una release publicada no confirma por sí sola su activación. El consumidor espera a que el workflow completo termine correctamente y vuelve a consultar cada cinco minutos, con hasta 15 segundos adicionales. Desde el LXC se puede verificar, sin reiniciar servicios:
+
+```bash
+readlink /opt/edge-proxy/www/tonicrespo/current
+systemctl list-timers --all edge-proxy-static-pull.timer --no-pager
+journalctl -u edge-proxy-static-pull.service -n 20 --no-pager
+```
+
+El enlace debe apuntar a `releases/<SHA del commit publicado>` y el registro mostrar ese mismo SHA como `published` o `unchanged`. `release.json` es un archivo de la release de GitHub, no un endpoint público del sitio; consultar esa ruta en la web no acredita qué versión sirve Caddy.
+
+Para previsualizar el build estático en local, usar `VITE_BASE_PATH=/ npm run build` y después `npm run preview`. El servidor de preview es sólo para comprobaciones locales; en producción sirve Caddy.
+
+Retirar el workflow de Pages evita futuras publicaciones una vez subido este cambio, pero no retira automáticamente una publicación anterior. Si esa URL sigue disponible, se debe despublicar por separado desde la configuración de GitHub Pages del repositorio.
+
+## Extraer el catálogo del WordPress original
+
+`npm run export:wordpress` crea una carpeta nueva en `exports/` con las imágenes públicas por colección, fichas TXT/JSON, catálogo CSV e índice HTML sin conexión. No requiere credenciales ni modifica la web o Supabase. `npm run test:wordpress-export` comprueba el parser de galerías.
+
+Consulta [el método y sus límites](context/extraccion-wordpress.md), especialmente para obras antiguas borradas o galerías actualmente vacías. Las extracciones quedan fuera de Git y no se incluyen en el despliegue.
 
 ## Rutas
 

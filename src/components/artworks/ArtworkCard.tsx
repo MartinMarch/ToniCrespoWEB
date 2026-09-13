@@ -1,6 +1,7 @@
 import { LoadingImage } from "../ui/Loaders";
 import type { CurrentArtwork } from "../../types/currentSite";
 import { ArtworkDimensions } from "./ArtworkDimensions";
+import { ArtworkAvailability } from "./ArtworkAvailability";
 
 type ArtworkCardProps = {
   artwork: CurrentArtwork;
@@ -18,6 +19,7 @@ export function ArtworkCard({ artwork }: ArtworkCardProps) {
       </a>
       <div className="card-body">
         <h3>{artwork.title}</h3>
+        <ArtworkAvailability isAvailable={artwork.isAvailable} />
         {artwork.technique ? <p>{artwork.technique}</p> : null}
         {artwork.dimensions ? <ArtworkDimensions value={artwork.dimensions} /> : null}
         {shouldShowCaption ? <p>{caption}</p> : null}

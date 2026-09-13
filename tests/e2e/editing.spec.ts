@@ -240,7 +240,7 @@ test("artwork upload failure keeps its draft, creates no row and supports a succ
   expect(backend.state.tables.artworks).toHaveLength(initialCount + 1);
 });
 
-test("failed artwork creation removes the uploaded orphan image and preserves the editor for retry", async ({ page, backend }) => {
+test("an uncertain artwork creation preserves its uploaded image and the editor for retry", async ({ page, backend }) => {
   await login(page, backend, "/lienzos/horizontes");
   await page.getByRole("button", { name: "Añadir obra", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: /^Añadir obra a / });
@@ -253,8 +253,10 @@ test("failed artwork creation removes the uploaded orphan image and preserves th
   await expect(dialog.getByRole("alert")).toBeVisible();
   expect(backend.state.tables.artworks).toHaveLength(initialCount);
   expect(backend.state.uploads).toHaveLength(1);
-  expect(backend.state.deletedAssets).toContain(backend.state.uploads[0]);
-  expect(backend.state.storage[backend.state.uploads[0]]).toBeUndefined();
+  // A failed HTTP response alone cannot prove that the server did not commit.
+  // Do not remove a file that may already be referenced by a saved artwork.
+  expect(backend.state.deletedAssets).toEqual([]);
+  expect(backend.state.storage[backend.state.uploads[0]]).toBeDefined();
   await expect(dialog.getByRole("textbox", { name: /^Descripción/ })).toHaveValue("Borrador que debe conservarse.");
   await dialog.getByRole("button", { name: "Añadir obra", exact: true }).click();
   await expect(dialog).toBeHidden();
@@ -337,7 +339,7 @@ test("news: uploads an image gallery, edits fields and translations, preserves i
   await expect(dialog).toBeHidden();
   const card = page.locator(".news-card").filter({ has: page.getByRole("heading", { name: "Noticia de prueba editorial", exact: true }) });
   await expect(card.locator(".news-card__zoom-button")).toHaveCount(2);
-  await expect(card.getByRole("link", { name: "Visitar aquí", exact: true })).toHaveAttribute("href", "https://example.com/exposicion");
+  await expect(card.getByRole("link", { name: "Visitar la noticia", exact: true })).toHaveAttribute("href", "https://example.com/exposicion");
   const row = backend.state.tables.news_items.find((item) => item.title === "Noticia de prueba editorial")!;
   const savedImages = backend.state.tables.news_item_images.filter((item) => item.news_item_id === row.id);
   expect(savedImages).toHaveLength(2);

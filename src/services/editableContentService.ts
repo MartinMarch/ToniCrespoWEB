@@ -1,4 +1,7 @@
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import { compareSupportCollections } from "../lib/supportCollections";
+import { buildNewsImageItems, buildNewsMetadata, type NewsEditingFields } from "../lib/newsEditing";
+import { normalizeCollectionDescriptionAlignment, type CollectionDescriptionAlignment } from "../types/collectionPresentation";
 import type { CurrentArtwork, CurrentPage } from "../types/currentSite";
 import type { NewsImage, NewsItem } from "../types/domain";
 import type { SupportKind } from "../types/support";
@@ -17,9 +20,11 @@ export type EditableCollection = {
   supportKind: SupportKind;
   title: string;
   description: string;
+  descriptionAlignment?: CollectionDescriptionAlignment;
   coverImageUrl: string | null;
   sortOrder: number;
   isPublished: boolean;
+  isRecent?: boolean;
   source: "legacy-wordpress" | "supabase";
   translations?: CollectionTranslations;
   artworks: CurrentArtwork[];
@@ -65,10 +70,12 @@ type CollectionRow = {
   support_kind: SupportKind;
   title: string;
   description: string;
+  description_alignment?: unknown;
   cover_image_url: string | null;
   sort_order: number;
   is_published: boolean;
   source: "legacy-wordpress" | "supabase";
+  is_recent?: boolean;
   translations?: CollectionTranslations | null;
   artworks?: ArtworkRow[];
 };
@@ -90,6 +97,7 @@ type ArtworkRow = {
   sort_order: number;
   is_published: boolean;
   translations?: ArtworkTranslations | null;
+  is_available?: boolean;
 };
 
 type PhotographyRow = {
@@ -142,6 +150,41 @@ export function getEditableOperationErrorMessage(
   const message = getErrorMessage(error);
   if (!message) return fallback;
 
+  if (/save_news_item/i.test(message) && /schema cache|does not exist|could not find/i.test(message)) {
+    return "Falta activar el guardado de noticias en Supabase. Aplica la migración news_item_atomic_save y vuelve a intentarlo.";
+  }
+  if (/NEWS_NOT_FOUND/i.test(message)) return "La noticia ya no existe. Recarga el catálogo para ver los últimos cambios.";
+  if (/NEWS_EDIT_FORBIDDEN/i.test(message)) return "Debes entrar con una cuenta administradora para guardar noticias.";
+  if (/NEWS_INVALID_INPUT/i.test(message)) return "Revisa el título, la fecha, los enlaces y las imágenes de la noticia antes de guardar.";
+
+  if (/ARTWORK_BRANCH_MISMATCH|COLLECTION_BRANCH_IMMUTABLE/i.test(message)) {
+    return "Lienzos y Obra en papel son secciones independientes. Las colecciones y sus obras no pueden trasladarse de una sección a la otra.";
+  }
+
+  if (/RECENT_COLLECTION_PROTECTED/i.test(message)) {
+    return "Obras recientes es una colección permanente. Puedes mostrarla u ocultarla, pero no eliminarla ni cambiar su nombre o sección.";
+  }
+
+  if (/COLLECTION_NOT_EMPTY/i.test(message)) {
+    return "La colección todavía contiene obras. Muévelas primero a otra colección de la misma sección. También puedes ocultarla sin eliminarla.";
+  }
+
+  if (/COLLECTION_NOT_FOUND/i.test(message)) {
+    return "La colección ya no existe. Recarga el catálogo para ver los últimos cambios.";
+  }
+
+  if (/description_alignment/i.test(message) && /schema cache|does not exist|column/i.test(message)) {
+    return "Falta activar la alineación de las colecciones en Supabase. Aplica 20260913093831_collection_description_alignment.sql y vuelve a intentarlo.";
+  }
+
+  if (/delete_empty_collection/i.test(message) && /schema cache|does not exist/i.test(message)) {
+    return "Falta activar el gestor de catálogo en Supabase. Aplica 20260912144600_artwork_catalog_branches.sql y vuelve a intentarlo.";
+  }
+
+  if (/is_available|is_recent/i.test(message) && /schema cache|does not exist|column/i.test(message)) {
+    return "Falta activar el gestor de catálogo en Supabase. Aplica 20260912144600_artwork_catalog_branches.sql y vuelve a intentarlo.";
+  }
+
   if (/translations.*schema cache|schema cache.*translations|column ['"]?translations/i.test(message)) {
     return "La base de datos no tiene aplicada la migración de edición contextual. Ejecuta 20260811110000_contextual_editing.sql en el SQL Editor de Supabase y vuelve a intentarlo.";
   }
@@ -185,7 +228,7 @@ export async function loadEditableContent(): Promise<EditableContentSnapshot> {
   const supabasePages = pageRows.map((row) => mapSitePageRow(row)).filter((page): page is CurrentPage => page !== null);
   const biographyRow = pageRows.find((row) => row.kind === "biography" && row.is_published);
   const biographyPage = biographyRow ? mapBiographyPage(biographyRow) : null;
-  const supabaseCollections = (collectionsResult.data ?? []).map((collection) => mapCollectionRow(collection as CollectionRow));
+  const supabaseCollections = (collectionsResult.data ?? []).map((collection) => mapCollectionRow(collection as CollectionRow)).sort(compareSupportCollections);
   const supabasePhotos = (photosResult.data ?? []).map((photo) => mapPhotographyRow(photo as PhotographyRow));
   const supabaseNews = (newsResult.data ?? []).map((item) => mapNewsRow(item as NewsRow));
 
@@ -236,8 +279,10 @@ export async function createCollection(input: {
   title: string;
   description: string;
   translations?: CollectionTranslations;
+  descriptionAlignment?: CollectionDescriptionAlignment;
 }) {
   assertSupabase();
+  assertCollectionDescriptionAlignment(input.descriptionAlignment);
   const [slug, sortOrder] = await Promise.all([
     getUniqueSlug("collections", input.title),
     getNextSortOrder("collections"),
@@ -251,6 +296,7 @@ export async function createCollection(input: {
       title: input.title.trim(),
       description: input.description.trim(),
       translations: input.translations ?? {},
+      ...(input.descriptionAlignment !== undefined ? { description_alignment: input.descriptionAlignment } : {}),
       sort_order: sortOrder,
       is_published: true,
       source: "supabase",
@@ -267,8 +313,10 @@ export async function updateCollection(input: {
   title: string;
   description: string;
   translations?: CollectionTranslations;
+  descriptionAlignment?: CollectionDescriptionAlignment;
 }) {
   assertSupabase();
+  assertCollectionDescriptionAlignment(input.descriptionAlignment);
 
   const { data, error } = await supabase!
     .from("collections")
@@ -276,6 +324,7 @@ export async function updateCollection(input: {
       title: input.title.trim(),
       description: input.description.trim(),
       translations: input.translations ?? {},
+      ...(input.descriptionAlignment !== undefined ? { description_alignment: input.descriptionAlignment } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.id)
@@ -284,6 +333,12 @@ export async function updateCollection(input: {
 
   if (error) throw error;
   if (!data) throw new Error("No se encontró la colección que querías actualizar.");
+}
+
+function assertCollectionDescriptionAlignment(value: unknown): void {
+  if (value !== undefined && value !== "justify" && value !== "center") {
+    throw new Error("Selecciona una alineación justificada o centrada para la descripción de la colección.");
+  }
 }
 
 export async function deleteCollection(input: { id: string }) {
@@ -309,6 +364,22 @@ export async function deleteCollection(input: { id: string }) {
   await cleanupOwnedEditableAssets(imageUrls);
 }
 
+export async function updateCollectionVisibility(input: { id: string; isPublished: boolean }) {
+  assertSupabase();
+  const { data, error } = await supabase!.from("collections")
+    .update({ is_published: input.isPublished, updated_at: new Date().toISOString() })
+    .eq("id", input.id).select("id").maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("No se encontró la colección que querías mostrar u ocultar.");
+}
+
+/** The manager only deletes empty collections; the database checks atomically. */
+export async function deleteEmptyCollection(input: { id: string }) {
+  assertSupabase();
+  const { error } = await supabase!.rpc("delete_empty_collection", { target_collection_id: input.id });
+  if (error) throw error;
+}
+
 export async function createArtwork(input: {
   collectionId: string;
   title: string;
@@ -320,6 +391,8 @@ export async function createArtwork(input: {
   width: number | null;
   height: number | null;
   translations?: ArtworkTranslations;
+  isAvailable?: boolean;
+  isPublished?: boolean;
 }) {
   assertSupabase();
   const [slug, sortOrder] = await Promise.all([
@@ -343,7 +416,8 @@ export async function createArtwork(input: {
       height: input.height,
       translations: input.translations ?? {},
       sort_order: sortOrder,
-      is_published: true,
+      ...(typeof input.isPublished === "boolean" ? { is_published: input.isPublished } : {}),
+      ...(typeof input.isAvailable === "boolean" ? { is_available: input.isAvailable } : {}),
       source: "supabase",
     })
     .select("id")
@@ -362,7 +436,7 @@ export async function createArtwork(input: {
     throw collectionError;
   }
 
-  if (!collection.cover_image_url) {
+  if (input.isPublished !== false && !collection.cover_image_url) {
     const { error: updateError } = await supabase!
       .from("collections")
       .update({ cover_image_url: input.imageUrl })
@@ -385,8 +459,14 @@ export async function updateArtwork(input: {
   technique: string;
   dimensions: string;
   translations?: ArtworkTranslations;
+  isAvailable?: boolean;
+  isPublished?: boolean;
+  replacementImage?: { imageUrl: string; width: number | null; height: number | null };
 }) {
   assertSupabase();
+  if (input.replacementImage && !input.replacementImage.imageUrl.trim()) {
+    throw new Error("La imagen nueva de la obra no tiene una dirección válida.");
+  }
 
   const { data, error } = await supabase!
     .from("artworks")
@@ -397,6 +477,16 @@ export async function updateArtwork(input: {
       technique: input.technique.trim() || null,
       dimensions: input.dimensions.trim() || null,
       translations: input.translations ?? {},
+      ...(typeof input.isPublished === "boolean" ? { is_published: input.isPublished } : {}),
+      ...(typeof input.isAvailable === "boolean" ? { is_available: input.isAvailable } : {}),
+      // A replacement is opt-in. Preserve the original import URL and all old
+      // files; thumbnails must not keep displaying the previous photograph.
+      ...(input.replacementImage ? {
+        image_url: input.replacementImage.imageUrl,
+        thumbnail_url: input.replacementImage.imageUrl,
+        width: input.replacementImage.width,
+        height: input.replacementImage.height,
+      } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.id)
@@ -422,6 +512,15 @@ export async function updateArtworkVisibility(input: { id: string; isPublished: 
 
   if (error) throw error;
   if (!data) throw new Error("No se encontró la obra que querías mostrar u ocultar.");
+}
+
+export async function updateArtworkAvailability(input: { id: string; isAvailable: boolean }) {
+  assertSupabase();
+  const { data, error } = await supabase!.from("artworks")
+    .update({ is_available: input.isAvailable, updated_at: new Date().toISOString() })
+    .eq("id", input.id).select("id").maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("No se encontró la obra cuya disponibilidad querías actualizar.");
 }
 
 export async function createPhotographyItem(input: {
@@ -477,106 +576,45 @@ export async function updatePhotographyItem(input: {
   if (!data) throw new Error("No se encontró la fotografía que querías actualizar.");
 }
 
-export async function createNewsItem(input: {
-  title: string;
-  publishedAt: string;
-  dateText: string;
-  category: NewsItem["category"];
-  location: string;
-  description: string;
-  externalUrl: string;
-  imageAlt: string;
+export async function createNewsItem(input: NewsEditingFields & {
   imageUrls: string[];
-  translations?: NewsTranslations;
+  images?: NewsImage[];
 }) {
   assertSupabase();
-  const [slug, sortOrder] = await Promise.all([
-    getUniqueSlug("news_items", input.title),
-    getNextSortOrder("news_items"),
-  ]);
-  const [primaryImageUrl] = input.imageUrls;
-  const { data, error } = await supabase!
-    .from("news_items")
-    .insert({
-      slug,
-      title: input.title.trim(),
-      published_at: input.publishedAt || null,
-      date_text: input.dateText.trim() || null,
-      category: input.category,
-      location: input.location.trim() || null,
-      description: input.description.trim() || null,
-      external_url: input.externalUrl.trim() || null,
-      image_url: primaryImageUrl ?? null,
-      image_alt: input.imageAlt.trim() || input.title.trim(),
-      translations: input.translations ?? {},
-      sort_order: sortOrder,
-      is_published: true,
-    })
-    .select("id")
-    .single();
-
-  if (error) throw error;
-
-  if (input.imageUrls.length > 0) {
-    const { error: imageError } = await supabase!.from("news_item_images").insert(
-      input.imageUrls.map((url, index) => ({
-        news_item_id: data.id,
-        image_url: url,
-        image_alt: input.imageAlt.trim() || input.title.trim(),
-        sort_order: index + 1,
-        is_primary: index === 0,
-      })),
-    );
-
-    if (imageError) {
-      await supabase!.from("news_items").delete().eq("id", data.id);
-      throw imageError;
-    }
-  }
+  const metadata = buildNewsMetadata(input);
+  if (!Array.isArray(input.imageUrls)) throw new Error("Revisa las imágenes de la noticia.");
+  const images = input.images === undefined ? input.imageUrls.map(url => ({ url, alt: metadata.image_alt })) : input.images;
+  return saveNewsItem({
+    target_news_id: null,
+    news_data: { ...metadata, slug: createSlug(metadata.title) || "noticia" },
+    image_items: buildNewsImageItems(images),
+  });
 }
 
-export async function updateNewsItem(input: {
+export async function updateNewsItem(input: NewsEditingFields & {
   id: string;
-  title: string;
-  publishedAt: string;
-  dateText: string;
-  category: NewsItem["category"];
-  location: string;
-  description: string;
-  externalUrl: string;
-  imageAlt: string;
-  translations?: NewsTranslations;
+  images?: NewsImage[];
 }) {
   assertSupabase();
+  if (typeof input.id !== "string" || !input.id.trim()) throw new Error("No se encontró la noticia que querías actualizar.");
+  return saveNewsItem({
+    target_news_id: input.id,
+    news_data: buildNewsMetadata(input),
+    image_items: input.images === undefined ? null : buildNewsImageItems(input.images),
+  });
+}
 
-  const { data, error } = await supabase!
-    .from("news_items")
-    .update({
-      title: input.title.trim(),
-      published_at: input.publishedAt || null,
-      date_text: input.dateText.trim() || null,
-      category: input.category,
-      location: input.location.trim() || null,
-      description: input.description.trim() || null,
-      external_url: input.externalUrl.trim() || null,
-      image_alt: input.imageAlt.trim() || input.title.trim(),
-      translations: input.translations ?? {},
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", input.id)
-    .select("id")
-    .maybeSingle();
-
+async function saveNewsItem(payload: {
+  target_news_id: string | null;
+  news_data: ReturnType<typeof buildNewsMetadata> & { slug?: string };
+  image_items: ReturnType<typeof buildNewsImageItems> | null;
+}) {
+  // The RPC commits metadata and gallery together. Never compensate failures
+  // with DELETE: a lost response can hide a successful commit.
+  const { data, error } = await supabase!.rpc("save_news_item", payload);
   if (error) throw error;
-  if (!data) throw new Error("No se encontró la noticia que querías actualizar.");
-
-  // The editor exposes one shared alt text for the complete gallery. Gallery
-  // images are separate rows; their old text must not hide the saved value.
-  const { error: imageError } = await supabase!
-    .from("news_item_images")
-    .update({ image_alt: input.imageAlt.trim() || input.title.trim() })
-    .eq("news_item_id", input.id);
-  if (imageError) throw imageError;
+  if (typeof data !== "string" || !data.trim()) throw new Error("No se ha podido confirmar el guardado de la noticia. Recarga el catálogo antes de repetir.");
+  return { id: data };
 }
 
 export async function deleteNewsItem(input: { id: string; imageUrls: string[] }) {
@@ -593,13 +631,15 @@ export async function deletePhotographyItem(input: { id: string; imageUrl: strin
   await cleanupOwnedEditableAssets([input.imageUrl]);
 }
 
-export async function deleteArtwork(input: { id: string; imageUrl: string }) {
+export async function deleteArtwork(input: { id: string; imageUrl: string; preserveAssets?: boolean }) {
   assertSupabase();
   const { error } = await supabase!.rpc("delete_artwork_with_cover_refresh", {
     target_artwork_id: input.id,
   });
   if (error) throw error;
-  await cleanupOwnedEditableAssets([input.imageUrl]);
+  // The manager preserves files because URLs may be shared by other content.
+  // Keep the legacy callers' behavior unless preservation is explicitly chosen.
+  if (!input.preserveAssets) await cleanupOwnedEditableAssets([input.imageUrl]);
 }
 
 export async function uploadEditableAsset(bucket: EditableAssetBucket, file: File) {
@@ -753,10 +793,12 @@ function mapCollectionRow(row: CollectionRow): EditableCollection {
     supportKind: row.support_kind,
     title: row.title,
     description: row.description,
+    descriptionAlignment: normalizeCollectionDescriptionAlignment(row.description_alignment),
     coverImageUrl: row.cover_image_url ?? artworks[0]?.imageUrl ?? null,
     sortOrder: row.sort_order,
     isPublished: row.is_published,
     source: row.source ?? "supabase",
+    isRecent: row.is_recent === true,
     translations: getTranslations<CollectionTranslations>(row.translations),
     artworks,
   };
@@ -779,6 +821,7 @@ function mapArtworkRow(row: ArtworkRow, collectionSlug: string): CurrentArtwork 
     height: row.height,
     sortOrder: row.sort_order,
     isPublished: row.is_published,
+    isAvailable: row.is_available !== false,
     translations: getTranslations<ArtworkTranslations>(row.translations),
   };
 }

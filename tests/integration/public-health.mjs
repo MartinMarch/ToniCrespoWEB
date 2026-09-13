@@ -4,8 +4,8 @@ import { readProjectEnv } from "../../scripts/lib/supabaseSnapshotUtils.mjs";
 
 const TABLES = Object.freeze({
   site_pages: "id,kind,html,content,is_published,translations",
-  collections: "id,cover_image_url,is_published,translations",
-  artworks: "id,collection_id,image_url,thumbnail_url,sort_order,description,is_published,translations",
+  collections: "id,support_kind,is_recent,description_alignment,cover_image_url,is_published,translations",
+  artworks: "id,collection_id,image_url,thumbnail_url,sort_order,description,is_published,is_available,translations",
   photography_items: "id,image_url,is_published,translations",
   news_items: "id,image_url,is_published,published_at,translations",
   news_item_images: "id,news_item_id,image_url,translations",
@@ -112,6 +112,18 @@ export async function runPublicHealth({ env, fetchImpl = fetch, log = console.lo
     log(`  ok ${table}: ${rows.length} filas públicas`);
   }
   if (data.admin_users.length) throw new Error("La lista de administradores es accesible sin autenticación.");
+  if (data.collections.some((row) => typeof row.is_recent !== "boolean" || !["canvas", "paper"].includes(row.support_kind))
+    || data.artworks.some((row) => typeof row.is_available !== "boolean")) {
+    throw new Error("Faltan campos del gestor de catálogo: comprueba las migraciones de Supabase.");
+  }
+  if (data.collections.some((row) => !["justify", "center"].includes(row.description_alignment))) {
+    throw new Error("Falta la alineación de las descripciones de colecciones: comprueba la migración de Supabase.");
+  }
+  const publicCollectionIds = new Set(data.collections.map((row) => row.id));
+  if (data.artworks.some((row) => !publicCollectionIds.has(row.collection_id))) {
+    throw new Error("RLS permite leer obras de una colección oculta o inexistente.");
+  }
+  log("  ok campos de disponibilidad/colecciones recientes y visibilidad de las obras por colección");
   for (const kind of ["home", "biography"]) {
     if (!data.site_pages.some((page) => page.kind === kind && page.html?.trim())) throw new Error(`Falta contenido público en ${kind}.`);
   }

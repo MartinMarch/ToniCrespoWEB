@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { isHexColor, normalizeGradientSettings } from "../lib/siteGradient";
 import { defaultSiteSettings, type SiteContactSettings, type SiteSettings } from "../types/siteSettings";
 
 type SiteSettingsRow = {
@@ -18,20 +19,24 @@ export async function loadSiteSettings(): Promise<SiteSettings> {
   return normalizeSiteSettings((data as SiteSettingsRow | null)?.value);
 }
 
-export async function updateSiteSettings(settings: SiteSettings) {
+export async function updateSiteSettings(settings: SiteSettings): Promise<SiteSettings> {
   if (!supabase) throw new Error("Supabase no está configurado.");
+  if (!isHexColor(settings.gradient?.startColor) || !isHexColor(settings.gradient?.endColor)) {
+    throw new Error("Los colores del fondo deben tener el formato #RRGGBB.");
+  }
 
   const normalized = normalizeSiteSettings(settings);
-  const { error } = await supabase.from("site_settings").upsert(
+  const { data, error } = await supabase.from("site_settings").upsert(
     {
       key: "global",
       value: normalized,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "key" },
-  );
+  ).select("value").single();
 
   if (error) throw error;
+  return normalizeSiteSettings((data as SiteSettingsRow).value);
 }
 
 function normalizeSiteSettings(value: unknown): SiteSettings {
@@ -43,6 +48,7 @@ function normalizeSiteSettings(value: unknown): SiteSettings {
   return {
     contact: normalizeContactSettings(contact),
     defaultLanguage: isSiteLanguage(candidate.defaultLanguage) ? candidate.defaultLanguage : defaultSiteSettings.defaultLanguage,
+    gradient: normalizeGradientSettings(candidate.gradient),
   };
 }
 

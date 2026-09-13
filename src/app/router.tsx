@@ -14,6 +14,20 @@ const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 
 export const router = createBrowserRouter([
   {
+    path: "/admin/contenido",
+    lazy: async () => {
+      const { ArtworkOrganizerPage } = await import("../pages/ArtworkOrganizerPage");
+      return { Component: ArtworkOrganizerPage };
+    },
+  },
+  {
+    path: "/admin/organizar-obras",
+    lazy: async () => {
+      const { ArtworkOrganizerPage } = await import("../pages/ArtworkOrganizerPage");
+      return { Component: ArtworkOrganizerPage };
+    },
+  },
+  {
     element: <Layout />,
     children: [
       {

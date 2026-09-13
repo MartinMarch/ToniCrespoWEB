@@ -18,8 +18,8 @@ const fixtures = {
     { id: "home", kind: "home", html: "<p>Home</p>", content: {}, translations: {}, is_published: true },
     { id: "bio", kind: "biography", html: "<p>Biography</p>", content: { mainImageUrl: image, galleryImages: [{ url: image }] }, translations: {}, is_published: true },
   ],
-  collections: [{ id: "collection", cover_image_url: "https://old.example.invalid/unused.jpg", is_published: true }],
-  artworks: [{ id: "artwork", collection_id: "collection", image_url: image, is_published: true, sort_order: 1 }],
+  collections: [{ id: "collection", support_kind: "canvas", is_recent: false, description_alignment: "justify", cover_image_url: "https://old.example.invalid/unused.jpg", is_published: true }],
+  artworks: [{ id: "artwork", collection_id: "collection", image_url: image, is_published: true, is_available: true, sort_order: 1 }],
   photography_items: [{ id: "photo", image_url: image, is_published: true }],
   news_items: [{ id: "news", image_url: "https://old.example.invalid/unused-news.jpg", is_published: true }],
   news_item_images: [{ id: "news-image", news_item_id: "news", image_url: image }],
@@ -57,6 +57,8 @@ test("default health checks eight public tables and deduplicated media using onl
   assert.ok(calls.every((call) => ["GET", "HEAD"].includes(call.method)));
   const adminQuery = calls.find((call) => call.url.includes("/rest/v1/admin_users?"));
   assert.equal(new URL(adminQuery.url).searchParams.get("select"), "created_at");
+  const collectionQuery = calls.find((call) => call.url.includes("/rest/v1/collections?"));
+  assert.ok(new URL(collectionQuery.url).searchParams.get("select").split(",").includes("description_alignment"));
   const mediaRequest = calls.find((call) => call.url === image);
   assert.equal(mediaRequest.headers, undefined, "Public media requests must never carry Supabase credentials.");
 });
@@ -65,6 +67,21 @@ test("only rendered image references are checked, not stale covers or news fallb
   assert.deepEqual(collectRenderedMedia(fixtures), [image]);
   const data = { ...fixtures, artworks: [...fixtures.artworks, { collection_id: "hidden-parent", image_url: "https://old.example.invalid/hidden.jpg" }] };
   assert.deepEqual(collectRenderedMedia(data), [image]);
+});
+
+test("description alignment must be migrated before deployment; both supported values pass", async () => {
+  for (const description_alignment of [undefined, null, "", "left", "CENTER"]) {
+    await assert.rejects(runPublicHealth({
+      env, skipMedia: true, log: () => {},
+      fetchImpl: mockPublicApi({ overrides: { collections: [{ ...fixtures.collections[0], description_alignment }] } }),
+    }), /alineación de las descripciones/);
+  }
+  for (const description_alignment of ["justify", "center"]) {
+    await runPublicHealth({
+      env, skipMedia: true, log: () => {},
+      fetchImpl: mockPublicApi({ overrides: { collections: [{ ...fixtures.collections[0], description_alignment }] } }),
+    });
+  }
 });
 
 test("bad image HTTP status and HTML masquerading as an image fail health", async () => {
@@ -139,6 +156,25 @@ test("configured frontend origin must be allowed by email CORS", async () => {
 test("empty home content and leaked hidden rows block the deployment health gate", async () => {
   await assert.rejects(runPublicHealth({ env, fetchImpl: mockPublicApi({ overrides: { site_pages: [] } }), skipMedia: true, log: () => {} }), /Falta contenido público/);
   await assert.rejects(runPublicHealth({ env, fetchImpl: mockPublicApi({ overrides: { artworks: [{ ...fixtures.artworks[0], is_published: false }] } }), skipMedia: true, log: () => {} }), /RLS permite leer contenido oculto/);
+});
+
+test("catalog health detects missing migration fields and artwork rows leaking from hidden collections", async () => {
+  for (const overrides of [
+    { artworks: [{ ...fixtures.artworks[0], is_available: undefined }] },
+    { collections: [{ ...fixtures.collections[0], is_recent: undefined }] },
+  ]) {
+    await assert.rejects(runPublicHealth({ env, fetchImpl: mockPublicApi({ overrides }), skipMedia: true, log: () => {} }), /migraciones de Supabase/);
+  }
+  await assert.rejects(runPublicHealth({ env, fetchImpl: mockPublicApi({ overrides: {
+    artworks: [{ ...fixtures.artworks[0], collection_id: "hidden-parent" }],
+  } }), skipMedia: true, log: () => {} }), /colección oculta/);
+});
+
+test("catalog health accepts unavailable published works and intentionally hidden recent collections", async () => {
+  const result = await runPublicHealth({ env, fetchImpl: mockPublicApi({ overrides: {
+    artworks: [{ ...fixtures.artworks[0], is_available: false }],
+  } }), skipMedia: true, log: () => {} });
+  assert.equal(result.tables, 8);
 });
 
 test("transient HTTP errors have only two retries", async () => {

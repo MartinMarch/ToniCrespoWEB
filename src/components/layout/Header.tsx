@@ -12,10 +12,13 @@ const HEADER_HIDE_OFFSET = 48;
 
 export function Header() {
   const { isEditMode } = useAdminSession();
-  const { contactSettings, defaultLanguage, labels, language, refreshSiteSettings, setLanguage } = useSitePreferences();
+  const { contactSettings, defaultLanguage, gradientSettings, labels, language, refreshSiteSettings, setLanguage } = useSitePreferences();
   const contactLinks = getContactLinks(contactSettings);
   const location = useLocation();
   const headerRef = useRef<HTMLElement | null>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const mobilePanelRef = useRef<HTMLDivElement | null>(null);
+  const lastHeaderFocusRef = useRef<Element | null>(null);
   const languageTriggerRef = useRef<HTMLButtonElement | null>(null);
   const languageMenuRef = useRef<HTMLDivElement | null>(null);
   const languageFocusTargetRef = useRef<"active" | "first" | "last">("active");
@@ -66,6 +69,43 @@ export function Header() {
   }, [location.pathname]);
 
   useEffect(() => {
+    const mobileViewport = window.matchMedia("(max-width: 820px)");
+    function rememberHeaderFocus(event: FocusEvent) {
+      lastHeaderFocusRef.current = event.target instanceof Element && headerRef.current?.contains(event.target)
+        ? event.target : null;
+    }
+    function forgetOutsidePointerFocus(event: PointerEvent) {
+      if (!headerRef.current?.contains(event.target as Node)) lastHeaderFocusRef.current = null;
+    }
+    function handleBreakpointChange() {
+      // CSS can hide a focused control before the media-query event fires.
+      // Recover that control only if focus fell to BODY, not after the user left the header.
+      const previous = lastHeaderFocusRef.current;
+      const focused = document.activeElement === document.body && previous && !previous.getClientRects().length
+        ? previous : document.activeElement;
+      if (languageMenuRef.current?.contains(focused)) languageTriggerRef.current?.focus();
+      else if (mobileViewport.matches && (mobilePanelRef.current?.contains(focused)
+        || (headerRef.current?.contains(focused) && focused?.closest(".header-socials__item--social, .header-socials__item--email")))) {
+        menuTriggerRef.current?.focus();
+      } else if (!mobileViewport.matches && (focused === menuTriggerRef.current
+        || mobilePanelRef.current?.querySelector(".header-mobile-shortcuts")?.contains(focused))) {
+        headerRef.current?.querySelector<HTMLAnchorElement>(".brand")?.focus();
+      }
+      setIsMenuOpen(false);
+      setIsLanguageOpen(false);
+      setIsHidden(false);
+    }
+    window.addEventListener("focusin", rememberHeaderFocus);
+    window.addEventListener("pointerdown", forgetOutsidePointerFocus);
+    mobileViewport.addEventListener("change", handleBreakpointChange);
+    return () => {
+      window.removeEventListener("focusin", rememberHeaderFocus);
+      window.removeEventListener("pointerdown", forgetOutsidePointerFocus);
+      mobileViewport.removeEventListener("change", handleBreakpointChange);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isLanguageOpen && !isMenuOpen) return;
 
     function handlePointerDown(event: PointerEvent) {
@@ -78,6 +118,7 @@ export function Header() {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         if (isLanguageOpen) languageTriggerRef.current?.focus();
+        else if (isMenuOpen) menuTriggerRef.current?.focus();
         setIsLanguageOpen(false);
         setIsMenuOpen(false);
       }
@@ -124,8 +165,8 @@ export function Header() {
     setDefaultLanguageError(null);
     setIsSavingDefault(true);
     try {
-      await updateSiteSettings({ contact: contactSettings, defaultLanguage: nextLanguage });
-      await refreshSiteSettings();
+      const savedSettings = await updateSiteSettings({ contact: contactSettings, defaultLanguage: nextLanguage, gradient: gradientSettings });
+      await refreshSiteSettings(savedSettings);
     } catch (error) {
       setDefaultLanguageError(getEditableOperationErrorMessage(error, "No se pudo actualizar el idioma predeterminado."));
     } finally {
@@ -139,35 +180,58 @@ export function Header() {
       className={`site-header${isScrolled ? " site-header--scrolled" : " site-header--top"}${
         isHidden && !isMenuOpen && !isLanguageOpen ? " site-header--hidden" : ""
       }${isMenuOpen ? " site-header--menu-open" : ""}`}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setIsMenuOpen(false);
+          setIsLanguageOpen(false);
+        }
+      }}
     >
+      <button
+        ref={menuTriggerRef}
+        type="button"
+        className="header-menu-trigger"
+        aria-label={isMenuOpen ? labels.aria.closeMenu : labels.aria.openMenu}
+        aria-controls="site-header-panel"
+        aria-expanded={isMenuOpen}
+        onClick={() => {
+          setIsLanguageOpen(false);
+          setIsMenuOpen((current) => !current);
+        }}
+      >
+        {isMenuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+      </button>
+
       <NavLink to="/" className="brand" aria-label="Toni Crespo inicio">
         <ToniCrespoLogo />
       </NavLink>
 
-      <nav className="main-nav" aria-label={labels.aria.mainNav} id="site-header-navigation">
-        {links.map((link) => (
-          <NavLink
-            key={link.path}
-            to={link.path}
-            onClick={() => setIsMenuOpen(false)}
-            className={({ isActive }) => (isActive || isSectionActive(link.path, location.pathname) ? "active" : undefined)}
-          >
-            {link.label}
-          </NavLink>
-        ))}
-      </nav>
+      <div ref={mobilePanelRef} className="header-mobile-panel" id="site-header-panel">
+        <nav className="main-nav" aria-label={labels.aria.mainNav} id="site-header-navigation">
+          {links.map((link) => (
+            <NavLink
+              key={link.path}
+              to={link.path}
+              onClick={() => setIsMenuOpen(false)}
+              className={({ isActive }) => (isActive || isSectionActive(link.path, location.pathname) ? "active" : undefined)}
+            >
+              {link.label}
+            </NavLink>
+          ))}
+        </nav>
 
-      <div className="header-mobile-shortcuts" aria-label={labels.aria.socials}>
-        {socials.map(({ href, label, social, Icon }) => (
-          <a key={social} href={href} target="_blank" rel="noreferrer" className="header-mobile-shortcut">
-            <Icon />
-            <span>{label}</span>
+        <div className="header-mobile-shortcuts" aria-label={labels.aria.socials}>
+          {socials.map(({ href, label, social, Icon }) => (
+            <a key={social} href={href} target="_blank" rel="noreferrer" className="header-mobile-shortcut">
+              <Icon />
+              <span>{label}</span>
+            </a>
+          ))}
+          <a className="header-mobile-shortcut" href={contactLinks.emailUrl}>
+            <Mail aria-hidden="true" />
+            <span>{labels.contact.viaEmail}</span>
           </a>
-        ))}
-        <a className="header-mobile-shortcut" href={contactLinks.emailUrl}>
-          <Mail aria-hidden="true" />
-          <span>{labels.contact.viaEmail}</span>
-        </a>
+        </div>
       </div>
 
       <ul className="header-socials" aria-label={labels.aria.socials}>
@@ -260,21 +324,6 @@ export function Header() {
               {defaultLanguageError ? <p className="language-menu__error" role="alert">{defaultLanguageError}</p> : null}
             </div>
           ) : null}
-        </li>
-        <li className="header-socials__item header-socials__item--menu">
-          <button
-            type="button"
-            className="header-menu-trigger"
-            aria-label={isMenuOpen ? labels.aria.closeMenu : labels.aria.openMenu}
-            aria-controls="site-header-navigation"
-            aria-expanded={isMenuOpen}
-            onClick={() => {
-              setIsLanguageOpen(false);
-              setIsMenuOpen((current) => !current);
-            }}
-          >
-            {isMenuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
-          </button>
         </li>
       </ul>
     </header>

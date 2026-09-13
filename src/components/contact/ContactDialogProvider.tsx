@@ -4,8 +4,9 @@ import { useSitePreferences, type SiteLabels } from "../../app/sitePreferences";
 import { getContactLinks, getEmailContactUrl, getWhatsAppContactUrl, type EmailContactDraft } from "../../lib/contact";
 import type { CurrentArtwork } from "../../types/currentSite";
 import { AdminDialog } from "../admin/AdminUi";
+import { ArtworkAvailability } from "../artworks/ArtworkAvailability";
 
-type ContactArtwork = Pick<CurrentArtwork, "dimensions" | "technique" | "title">;
+type ContactArtwork = Pick<CurrentArtwork, "dimensions" | "technique" | "title" | "isAvailable">;
 
 type ContactDialogContextValue = {
   openArtworkContact: (artwork: ContactArtwork) => void;
@@ -57,6 +58,12 @@ function ArtworkContactDialog({
   return (
     <AdminDialog title={`${labels.contact.artworkDialogTitle}: ${artwork.title}`} onClose={onClose} className="contact-dialog">
       <div className="contact-dialog__body">
+        {artwork.isAvailable === false ? (
+          <div className="artwork-contact-availability">
+            <ArtworkAvailability isAvailable={false} />
+            <p>{labels.contact.unavailableNotice}</p>
+          </div>
+        ) : null}
         <div className="contact-channel-grid">
           <a
             className="contact-channel contact-channel--whatsapp"
@@ -101,8 +108,10 @@ function createArtworkEmailDraft(
   const artworkDescription = details ? `${artwork.title} (${details})` : artwork.title;
 
   return {
-    message: `${labels.actions.interestMessagePrefix} ${artworkDescription}. ${labels.actions.interestMessageSuffix}`,
-    subject: `${labels.contact.artworkSubjectPrefix}: ${artwork.title}`,
+    message: artwork.isAvailable === false
+      ? `${labels.actions.inquiryMessagePrefix} ${artworkDescription}. ${labels.actions.inquiryMessageSuffix}`
+      : `${labels.actions.interestMessagePrefix} ${artworkDescription}. ${labels.actions.interestMessageSuffix}`,
+    subject: `${artwork.isAvailable === false ? labels.contact.artworkInquirySubjectPrefix : labels.contact.artworkSubjectPrefix}: ${artwork.title}`,
   };
 }
 

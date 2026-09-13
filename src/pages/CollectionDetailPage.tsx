@@ -3,6 +3,7 @@ import { useEditableContent } from "../app/editableContent";
 import { useSitePreferences } from "../app/sitePreferences";
 import { ArtworkShowcaseList } from "../components/artworks/ArtworkShowcaseList";
 import { BreadcrumbTrail } from "../components/navigation/BreadcrumbTrail";
+import { CollectionDescription } from "../components/support/CollectionDescription";
 import { PageLoader } from "../components/ui/Loaders";
 
 export function CollectionDetailPage() {
@@ -33,6 +34,7 @@ export function CollectionDetailPage() {
       <div className="support-detail-heading">
         <BreadcrumbTrail items={[{ label: labels.nav.work, path: "/obra" }, { label: collection.title }]} />
         <h1>{collection.title}</h1>
+        <CollectionDescription description={collection.description} alignment={collection.descriptionAlignment} />
       </div>
       {collection.artworks.length > 0 ? (
         <ArtworkShowcaseList artworks={collection.artworks} />

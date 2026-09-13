@@ -1,0 +1,93 @@
+.artwork-availability {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  align-self: start;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.4rem 0 0.15rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  text-align: left;
+  text-transform: none;
+}
+
+.artwork-contact-availability {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+
+.artwork-mockup-lightbox__heading .artwork-availability {
+  justify-self: center;
+}
+
+.artwork-contact-availability p {
+  margin: 0;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.admin-form .artwork-editor-state {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d6d4ce;
+  border-radius: 10px;
+}
+
+.artwork-editor-state legend {
+  padding: 0 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.admin-form .artwork-editor-state label {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.admin-form .artwork-editor-state input[type="checkbox"] {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  margin: 0;
+  padding: 0;
+  accent-color: #292824;
+  cursor: pointer;
+}
+
+.artwork-editor-state input:focus-visible {
+  outline: 2px solid #292824;
+  outline-offset: 4px;
+}
+
+.admin-form .artwork-editor-state p {
+  margin: 0.25rem 0 0;
+  color: #57554f;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.artwork-editor-state:disabled {
+  opacity: 0.6;
+}
+
+.admin-form .artwork-editor-state:disabled label,
+.admin-form .artwork-editor-state input:disabled {
+  cursor: not-allowed;
+}

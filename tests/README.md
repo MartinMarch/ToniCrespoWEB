@@ -6,10 +6,11 @@ Las pruebas de interfaz, la integración con Supabase y la comprobación del ser
 
 | Ubicación | Qué comprueba | Servicios externos y escrituras |
 | --- | --- | --- |
-| `unit/*.test.mjs` | Atribución del poema, párrafos y traducciones de obras, texto escapado, medidas físicas y geometría de ambientes; también se conservan las pruebas del código heredado de correo con Deno y proveedor simulados. | Sin acceso remoto ni envíos de correo. La función Resend ya no pertenece al flujo activo. |
+| `unit/*.test.mjs` | Atribución del poema, párrafos y traducciones de obras, texto escapado, medidas físicas y geometría de ambientes; contrato del workflow exclusivo del edge, sin publicaciones Pages; también se conservan las pruebas del código heredado de correo con Deno y proveedor simulados. | Sin acceso remoto ni envíos de correo. La función Resend ya no pertenece al flujo activo. |
 | `e2e/*.spec.ts` | React real en Chromium de escritorio y móvil táctil emulado: navegación, idiomas, portada, footer, colecciones, visor, filtros, contactos `mailto:` y formularios de edición. Incluye errores, reintentos, cancelaciones, archivos huérfanos y contenido oculto. | Supabase, Storage y Auth **simulados** mediante `helpers/mock-supabase.ts`; las solicitudes externas se interceptan. No modifica producción ni envía correos. |
 | `integration/*.test.mjs` | Pruebas locales de las guardas del ejecutor Supabase y del comprobador público: configuración, privilegios, HTTP, imágenes, CORS y honeypot. | Solicitudes simuladas o bloqueadas. No modifica servicios reales. |
 | `integration/supabase-editing.mjs` | Auth, `is_admin`, RLS, CRUD editorial, traducciones, saltos de línea, visibilidad, ajustes aislados, Storage y borrado en cascada. | **Integración real** contra el destino elegido. Crea y elimina datos temporales; requiere consentimiento explícito. |
+| `integration/catalog-live-rollback.sql` | Comprobación manual posterior a la migración: permisos, disponibilidad, edición, movimientos, conflictos, ocultación y borrados del catálogo. | **SQL real** mediante conexión de confianza, fuera de CI. Simula permisos dentro de una transacción y termina en `ROLLBACK`; no toca Storage ni crea usuarios. |
 | `integration/public-health.mjs` | Lectura anónima del contenido y ajustes publicados, dirección de contacto válida, aislamiento de administradores y disponibilidad de imágenes utilizadas por la web. | Lecturas reales. No invoca Resend en el flujo activo; conserva un diagnóstico opcional de la función heredada. |
 | `browser/*.mjs` | Comprobaciones auxiliares anteriores de ambientes y texto/editor de inicio mediante Chrome. | Mantienen sus ejecutores de compatibilidad en `scripts/`; no sustituyen las suites anteriores. |
 
@@ -22,7 +23,7 @@ npm test
 npm run test:ci
 ```
 
-`npm test` ejecuta las pruebas locales y de interfaz. `test:ci` añade la comprobación de tipos, las regresiones de componentes y el build. Playwright inicia su propio servidor Vite en el puerto 4175; no reutiliza el servidor de desarrollo del usuario. Se puede cambiar mediante `E2E_PORT`. Las regresiones de componentes arrancan otro servidor aislado en 4177, que cierran al finalizar. Para usar un Chrome instalado, establecer `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+`npm test` ejecuta las pruebas locales y de interfaz. `test:ci` añade la comprobación de tipos, las pruebas del extractor de WordPress, las regresiones de componentes y el build. Playwright inicia su propio servidor Vite en el puerto 4175; no reutiliza el servidor de desarrollo del usuario. Se puede cambiar mediante `E2E_PORT`. Las regresiones de componentes arrancan otro servidor aislado en 4177, que cierran al finalizar. Para usar un Chrome instalado, establecer `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
 
 Las capturas y trazas de fallos se generan en `test-results/`; el informe HTML está en `playwright-report/`. No contienen resultados de una integración remota por el mero hecho de que Playwright termine correctamente.
 
@@ -36,6 +37,34 @@ node --test tests/integration/*.test.mjs
 ```
 
 ## Integración real con Supabase local
+
+### Reorganización atómica de obras
+
+```bash
+npm run test:organization:sql
+# Opcional: revisar también los avisos de seguridad de la función nueva.
+npm run test:organization:sql -- --advisors
+```
+
+Requiere las herramientas del servidor PostgreSQL (`pg_config`, `initdb`, `pg_ctl`, `psql`). El ejecutor crea un clúster privado temporal conectado únicamente por socket Unix, aplica las migraciones del repositorio y lo elimina al terminar. No lee `.env`, no abre puertos y no accede a Supabase remoto. Comprueba permisos reales, transacciones, conflictos concurrentes, colisiones de identificadores y conservación de imágenes, textos y estados publicado/oculto. GitHub ejecuta esta prueba antes del resto de la calidad y del despliegue.
+
+`e2e/artwork-organizer.spec.ts` cubre por separado la interfaz del panel con Supabase simulado: acceso administrativo, miniaturas, arrastre con ratón/teclado/táctil, movimiento mediante controles, búsqueda, borradores, deshacer/rehacer, confirmaciones, guardado y recuperación de errores. Estas pruebas no reorganizan el catálogo real.
+
+`e2e/content-manager.spec.ts` amplía la cobertura al gestor: separación de ramas, colecciones recientes permanentes, creación/edición/eliminación, visibilidad y disponibilidad independientes, etiqueta pública, filtros y recuperación después de guardar. Las pruebas SQL también verifican estas restricciones frente a consultas directas y cambios concurrentes. Véase [guía del gestor](../context/gestor-contenido.md).
+
+También comprueba el catálogo heredado en los cuatro idiomas sin filtros por palabras de la técnica, los avisos editoriales y su reparación, y el reemplazo opcional de imágenes sin borrar archivos compartidos. Una respuesta de escritura incierta conserva el archivo subido: un error HTTP no demuestra que la obra no se haya guardado.
+
+`e2e/collection-description.spec.ts` recorre la edición y publicación simulada de descripciones en colecciones normales y recientes, los cuatro idiomas, el listado antes de entrar y las rutas de soporte y `/obra/:slug`. Comprueba la aparición inmediata debajo del título, alineación justificada o centrada persistente, vista previa y cancelación/reintento, párrafos y saltos de línea sin recortes, recargas, apertura del editor en el idioma visitado, texto vacío, escape de HTML y márgenes móviles sin solapar las obras.
+
+`e2e/news.spec.ts` comprueba el listado de noticias sin marcos móviles, galerías completas con deslizamiento táctil y navegación por teclado, filtros compactos y enlaces seguros. Incluye selección incremental de archivos, vista previa, orden, retirada de todas las imágenes, traducciones y guardado atómico simulado. Distingue un rechazo confirmado de una respuesta perdida o un fallo al recargar después de guardar: no repite escrituras inciertas ni elimina sus imágenes. El mock del RPC verifica el contrato de la interfaz; no demuestra las transacciones ni los permisos de la base publicada.
+
+`integration/collection-description-live-rollback.sql` es una comprobación **manual**, mediante conexión de confianza, del guardado real de descripción/alineación en una colección normal y una reciente de cada rama. Verifica permisos administrativos, conservación de otros campos y restricciones del valor. Simula las claims de un administrador confirmado existente, no su intercambio de contraseña. No crea usuarios ni toca Storage: todas las escrituras editoriales se revierten con `ROLLBACK`. No forma parte del workflow automático ni debe ejecutarse como un test de producción ordinario.
+
+### Comprobación manual posterior a la migración
+
+`integration/catalog-live-rollback.sql` se ejecuta completo mediante una conexión Supabase de confianza, únicamente con autorización para el proyecto concreto. No pertenece al workflow ni se ejecuta desde el navegador. Requiere un administrador ya existente y confirmado; simula sus claims de sesión y los de otros roles solo dentro de la transacción, sin leer contraseñas ni crear usuarios de Auth. Comprueba permisos y operaciones reales del catálogo y acaba con `ROLLBACK`, sin dejar cambios del ensayo ni modificar Storage. No sustituye una prueba del inicio de sesión real por contraseña ni las pruebas E2E con Auth simulado.
+
+### Auth, CRUD, RLS y Storage
 
 Requiere Docker en funcionamiento. La pila de pruebas es independiente del proyecto publicado y se construye a partir de las migraciones del repositorio.
 
@@ -83,6 +112,8 @@ npm run test:public-health
 Requiere `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`; en CI ambas deben estar en el entorno. Localmente admite `.env`. Rechaza claves de servicio y sesiones de usuario.
 
 Comprueba ocho tablas con consultas de lectura y `is_admin=false`. Exige contenido público real en inicio, trayectoria y noticias, además de los ajustes globales y una dirección de contacto válida sin prefijo `mailto:` ni parámetros; por tanto no está diseñado para una base local recién migrada y vacía. Examina las imágenes efectivamente utilizadas, omitiendo portadas y fuentes antiguas que ya no se renderizan. Usa HEAD o un GET parcial cancelado, hasta seis solicitudes concurrentes y un límite global de cuatro minutos. Espacia los inicios al menos 250 ms por origen; ante HTTP 429, 5xx o errores de red permite sólo dos reintentos, con esperas de 1 y 2 segundos como mínimo. Respeta `Retry-After` en segundos o fecha y comparte la pausa de un 429 entre los trabajadores del mismo origen. Si la espera exigida excede el tiempo global disponible, falla sin reenviar antes de lo indicado. Un 429 persistente, una imagen ausente o un permiso denegado siguen bloqueando el despliegue; nunca se omiten imágenes para dar la prueba por correcta. Las pruebas unitarias simulan el reloj y las esperas. No guarda imágenes ni descarga archivos completos.
+
+El control público exige además los campos `collections.is_recent` y `artworks.is_available`, y verifica que las obras accesibles pertenezcan a una colección publicada. Una migración pendiente o una política que exponga obras de una colección oculta hacen fallar esta comprobación.
 
 `--skip-media` sirve para una comprobación local rápida, pero omite la verificación de imágenes y no debe utilizarse como validación completa de despliegue.
 

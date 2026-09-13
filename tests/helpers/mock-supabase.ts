@@ -8,7 +8,7 @@ export const MOCK_SUPABASE_URL = 'https://test-project.supabase.co';
 export type MockRow = Record<string, any>;
 type MockAsset = { body: Buffer; contentType: string };
 type RecordedRequest = { method: string; url: string; body: any };
-type Failure = { table?: string; path?: string; method?: string; status?: number; message?: string };
+type Failure = { table?: string; path?: string; method?: string; status?: number; message?: string; code?: string };
 export type MockBackendState = {
   tables: Record<string, MockRow[]>;
   storage: Record<string, MockAsset>;
@@ -37,7 +37,7 @@ function createSeed(): MockBackendState {
   const exhibition = asset('news', 'primavera', 600, 400);
   const interview = asset('news', 'entrevista', 500, 400);
   const collection = (id: string, slug: string, title: string, support_kind: string, sort_order: number, cover_image_url: string | null) => ({
-    id, slug, title, support_kind, sort_order, cover_image_url, description: 'Paisajes y memoria del Mediterráneo.', is_published: true, source: 'supabase', translations: {},
+    id, slug, title, support_kind, sort_order, cover_image_url, description: 'Paisajes y memoria del Mediterráneo.', description_alignment: 'justify', is_published: true, source: 'supabase', translations: {},
   });
   const artwork = (id: string, collection_id: string, slug: string, title: string, dimensions: string, image_url: string, width: number, height: number, sort_order: number, is_published = true) => ({
     id, collection_id, slug, title, dimensions, image_url, source_image_url: image_url, thumbnail_url: null, width, height, sort_order, is_published,
@@ -99,6 +99,24 @@ export class MockSupabaseBackend {
 
   failNext(failure: Failure) { this.failures.push(failure); }
 
+  /** Opt-in migration-shaped fixture. Existing suites keep their legacy seed
+   * and can still verify missing-field compatibility without extra collections.
+   */
+  enableContentManagerFixture() {
+    for (const support of ['canvas', 'paper'] as const) {
+      if (this.state.tables.collections.some((row) => row.support_kind === support && row.is_recent === true)) continue;
+      const template = this.state.tables.collections.find((row) => row.support_kind === support)!;
+      this.state.tables.collections.push({
+        ...structuredClone(template), id: `collection-recent-${support}`, slug: `obras-recientes-${support === 'canvas' ? 'lienzos' : 'papel'}`, title: 'Obras recientes',
+        description: '', is_recent: true, is_published: true, cover_image_url: null,
+        translations: { ca: { title: 'Obres recents' }, en: { title: 'Recent works' }, de: { title: 'Aktuelle Werke' } },
+        // A high old sort order makes tests prove pinning is semantic, not an
+        // accident of the initial rows or of a hardcoded numeric sort order.
+        sort_order: 100,
+      });
+    }
+  }
+
   async signIn(page: Page, role: 'admin' | 'nonAdmin' = 'admin') {
     if (page.url() === 'about:blank') await page.goto('/');
     await page.getByRole('button', { name: 'Edición web', exact: true }).click();
@@ -143,7 +161,7 @@ export class MockSupabaseBackend {
     const failedIndex = this.failures.findIndex((failure) => (!failure.table || failure.table === table) && (!failure.path || url.pathname.includes(failure.path)) && (!failure.method || failure.method.toUpperCase() === method));
     if (failedIndex >= 0) {
       const failure = this.failures.splice(failedIndex, 1)[0];
-      return this.respond(route, failure.status ?? 500, { message: failure.message ?? 'Fallo simulado de guardado', error: failure.message ?? 'Fallo simulado de guardado', code: 'TEST_FAILURE' });
+      return this.respond(route, failure.status ?? 500, { message: failure.message ?? 'Fallo simulado de guardado', error: failure.message ?? 'Fallo simulado de guardado', code: failure.code ?? 'TEST_FAILURE' });
     }
     const role = this.role(request);
     if (url.pathname === '/auth/v1/token' && method === 'POST') {
@@ -155,6 +173,23 @@ export class MockSupabaseBackend {
     if (url.pathname === '/auth/v1/logout') return this.respond(route, 204);
     if (url.pathname === '/auth/v1/user') return role ? this.respond(route, 200, this.user(role)) : this.respond(route, 401, { message: 'No authenticated user' });
     if (url.pathname === '/rest/v1/rpc/is_admin') return this.respond(route, 200, role === 'admin');
+    if (url.pathname === '/rest/v1/rpc/save_news_item' && method === 'POST') {
+      if (role !== 'admin') return this.respond(route, 403, { code: '42501', message: 'NEWS_EDIT_FORBIDDEN' });
+      return this.saveNewsItem(route, body);
+    }
+    if (url.pathname === '/rest/v1/rpc/reorganize_artworks' && method === 'POST') {
+      if (role !== 'admin') return this.denied(route);
+      return this.reorganizeArtworks(route, body);
+    }
+    if (url.pathname === '/rest/v1/rpc/delete_empty_collection' && method === 'POST') {
+      if (role !== 'admin') return this.denied(route);
+      const collection = this.state.tables.collections.find((row) => row.id === body?.target_collection_id);
+      if (!collection) return this.respond(route, 400, { code: 'P0002', message: 'COLLECTION_NOT_FOUND' });
+      if (collection.is_recent) return this.respond(route, 400, { code: '23514', message: 'RECENT_COLLECTION_PROTECTED' });
+      if (this.state.tables.artworks.some((row) => row.collection_id === collection.id)) return this.respond(route, 400, { code: '23514', message: 'COLLECTION_NOT_EMPTY' });
+      this.state.tables.collections = this.state.tables.collections.filter((row) => row.id !== collection.id);
+      return this.respond(route, 200, null);
+    }
     if (url.pathname === '/rest/v1/rpc/delete_artwork_with_cover_refresh' && method === 'POST') {
       if (role !== 'admin') return this.denied(route);
       const artwork = this.state.tables.artworks.find((row) => row.id === body.target_artwork_id);
@@ -198,23 +233,162 @@ export class MockSupabaseBackend {
     return this.respond(route, 501, { message: `Unhandled local test endpoint: ${method} ${url.pathname}` });
   }
 
+  /** HTTP protocol model only: real transactional/RLS guarantees are covered by
+   * the separate PostgreSQL suite, never established by a browser test double.
+   */
+  private saveNewsItem(route: Route, body: any) {
+    const invalid = () => this.respond(route, 400, { code: '22023', message: 'NEWS_INVALID_INPUT' });
+    const object = (value: any) => value && typeof value === 'object' && !Array.isArray(value);
+    const safeUrl = (value: any) => {
+      if (typeof value !== 'string' || /[\\\u0000-\u001f\u007f]/.test(value) || !/^https?:\/\//i.test(value)) return false;
+      try { const url = new URL(value); return Boolean(url.hostname) && !url.username && !url.password; } catch { return false; }
+    };
+    const data = body?.news_data;
+    const images = body?.image_items;
+    const id = body?.target_news_id;
+    const existing = id == null ? undefined : this.state.tables.news_items.find((row) => row.id === id);
+    if (id != null && !existing) return this.respond(route, 400, { code: 'P0002', message: 'NEWS_NOT_FOUND' });
+    if (!object(data) || typeof data.title !== 'string' || !data.title.trim()
+      || !['exposicion', 'premio', 'entrevista', 'publicacion', 'evento', 'television'].includes(data.category)
+      || !object(data.translations) || typeof data.image_alt !== 'string'
+      || (data.external_url != null && data.external_url !== '' && !safeUrl(data.external_url))
+      || (images !== null && !Array.isArray(images))
+      || (!existing && (typeof data.slug !== 'string' || !data.slug.trim()))) return invalid();
+    if (data.published_at != null && (typeof data.published_at !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data.published_at)
+      || Number.isNaN(Date.parse(data.published_at)) || new Date(data.published_at).toISOString().slice(0, 10) !== data.published_at)) return invalid();
+    if (Array.isArray(images) && images.some((entry) => !object(entry) || !safeUrl(entry.image_url)
+      || (entry.caption != null && typeof entry.caption !== 'string') || !object(entry.translations))) return invalid();
+
+    // Build replacements before committing either table; metadata and visibility
+    // not exposed by this editor remain untouched on updates.
+    const newsId = existing?.id ?? `test-news-${this.nextId++}`;
+    let slug = existing?.slug ?? data.slug.trim();
+    if (!existing) {
+      let suffix = 2;
+      while (this.state.tables.news_items.some((row) => row.slug === slug)) slug = `${data.slug.trim()}-${suffix++}`;
+    }
+    const row: MockRow = { ...(existing ?? { id: newsId, slug, sort_order: Math.max(0, ...this.state.tables.news_items.map((entry) => entry.sort_order ?? 0)) + 1, is_published: true }),
+      title: data.title.trim(), published_at: data.published_at ?? null, date_text: data.date_text ?? null, category: data.category,
+      location: data.location ?? null, description: data.description ?? null, external_url: data.external_url || null,
+      image_alt: data.image_alt.trim() || data.title.trim(), translations: structuredClone(data.translations), updated_at: new Date().toISOString() };
+    const gallery = images === null
+      ? this.state.tables.news_item_images.filter((entry) => entry.news_item_id === newsId).map((entry) => ({ ...entry, image_alt: row.image_alt }))
+      : images.map((entry: MockRow, index: number) => ({ id: `test-news-image-${this.nextId++}`, news_item_id: newsId,
+        image_url: entry.image_url, image_alt: row.image_alt, caption: entry.caption ?? null, translations: structuredClone(entry.translations), sort_order: index, is_primary: index === 0 }));
+    if (images !== null) row.image_url = gallery[0]?.image_url ?? null;
+    this.state.tables.news_items = [...this.state.tables.news_items.filter((entry) => entry.id !== newsId), row];
+    this.state.tables.news_item_images = [...this.state.tables.news_item_images.filter((entry) => entry.news_item_id !== newsId), ...gallery];
+    return this.respond(route, 200, newsId);
+  }
+
+  /** Protocol model of the atomic RPC, not an implementation/proof of SQL locks or RLS.
+   * Fixture IDs are intentionally opaque strings instead of production UUIDs.
+   * Validate every affected collection before replacing either table.
+   */
+  private reorganizeArtworks(route: Route, body: any) {
+    const invalid = () => this.respond(route, 400, { code: '22023', message: 'Invalid organization payload' });
+    const conflict = () => this.respond(route, 500, { code: '40001', message: 'ORGANIZATION_CONFLICT: artworks changed' });
+    const expected = body?.expected_state;
+    const next = body?.next_state;
+    if (!Array.isArray(expected) || !Array.isArray(next)) return invalid();
+    if (expected.some((collection) => !collection || typeof collection.id !== 'string' || !Array.isArray(collection.artworks)
+      || collection.artworks.some((artwork: any) => !artwork || typeof artwork.id !== 'string' || !Number.isInteger(artwork.sort_order)))
+      || next.some((collection) => !collection || typeof collection.id !== 'string' || !Array.isArray(collection.artwork_ids)
+        || collection.artwork_ids.some((id: any) => typeof id !== 'string'))) return invalid();
+    const sameIds = (first: string[], second: string[]) => JSON.stringify([...first].sort()) === JSON.stringify([...second].sort());
+    const collectionIds = expected.map((collection) => collection.id);
+    if (new Set(collectionIds).size !== collectionIds.length || !sameIds(collectionIds, next.map((collection) => collection.id))) return invalid();
+    const expectedIds = expected.flatMap((collection) => collection.artworks.map((artwork: any) => artwork.id));
+    const nextIds = next.flatMap((collection) => collection.artwork_ids);
+    if (new Set(expectedIds).size !== expectedIds.length || !sameIds(expectedIds, nextIds)) return invalid();
+    if (!collectionIds.length) return this.respond(route, 200, null);
+    const snapshot = (artworks: MockRow[]) => artworks.map(({ id, sort_order }) => ({ id, sort_order })).sort((a, b) => a.id.localeCompare(b.id));
+    for (const collection of expected) {
+      if (!this.state.tables.collections.some((row) => row.id === collection.id)) return conflict();
+      const actual = this.state.tables.artworks.filter((row) => row.collection_id === collection.id);
+      if (JSON.stringify(snapshot(actual)) !== JSON.stringify(snapshot(collection.artworks))) return conflict();
+    }
+
+    const artworks = structuredClone(this.state.tables.artworks);
+    const collections = structuredClone(this.state.tables.collections);
+    const positions = new Map<string, { collectionId: string; index: number }>();
+    next.forEach((collection) => collection.artwork_ids.forEach((id: string, index: number) => positions.set(id, { collectionId: collection.id, index })));
+    for (const row of artworks) {
+      const target = positions.get(row.id);
+      if (!target || target.collectionId === row.collection_id) continue;
+      const from = collections.find((collection) => collection.id === row.collection_id)!;
+      const to = collections.find((collection) => collection.id === target.collectionId)!;
+      if (from.support_kind !== to.support_kind) return this.respond(route, 400, { code: '23514', message: 'ARTWORK_BRANCH_MISMATCH' });
+    }
+    const moved = artworks.filter((row) => positions.has(row.id) && positions.get(row.id)!.collectionId !== row.collection_id)
+      .map((row) => ({ id: row.id as string, slug: row.slug as string })).sort((a, b) => a.id.localeCompare(b.id));
+    const timestamp = new Date().toISOString();
+    // Release all moving slugs first, matching swaps handled by the transaction.
+    moved.forEach(({ id }) => { artworks.find((row) => row.id === id)!.slug = `__local_organizer_${id}`; });
+    for (const moving of moved) {
+      const row = artworks.find((artwork) => artwork.id === moving.id)!;
+      const destination = positions.get(row.id)!.collectionId;
+      let slug = moving.slug;
+      let suffix = 0;
+      while (artworks.some((artwork) => artwork.id !== row.id && artwork.collection_id === destination && artwork.slug === slug)) {
+        suffix += 1;
+        slug = `${moving.slug}-${moving.id}${suffix === 1 ? '' : `-${suffix}`}`;
+      }
+      Object.assign(row, { collection_id: destination, slug, updated_at: timestamp });
+    }
+    for (const row of artworks) {
+      const position = positions.get(row.id);
+      if (position && row.sort_order !== position.index) Object.assign(row, { sort_order: position.index, updated_at: timestamp });
+    }
+    for (const collection of collections) {
+      if (!collectionIds.includes(collection.id)) continue;
+      const firstVisible = artworks.filter((row) => row.collection_id === collection.id && row.is_published)
+        .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))[0];
+      Object.assign(collection, { cover_image_url: firstVisible?.image_url ?? null, updated_at: timestamp });
+      if (collection.is_recent) collection.sort_order = -1;
+    }
+    this.state.tables.artworks = artworks;
+    this.state.tables.collections = collections;
+    return this.respond(route, 200, null);
+  }
+
   private async rest(route: Route, url: URL, table: string, method: string, body: any, isAdmin: boolean) {
     let rows = this.state.tables[table].filter((row) => matches(row, url.searchParams));
     if (!isAdmin) rows = rows.filter((row) => row.is_published !== false);
+    if (!isAdmin && table === 'artworks') rows = rows.filter((row) => this.state.tables.collections
+      .some((collection) => collection.id === row.collection_id && collection.is_published !== false));
+    if (['collections', 'artworks'].includes(table) && ['POST', 'PATCH', 'DELETE'].includes(method)) {
+      const changes: Array<{ before?: MockRow; after?: MockRow }> = method === 'POST'
+        ? (Array.isArray(body) ? body : [body]).map((value: MockRow, index: number) => {
+          const conflict = url.searchParams.get('on_conflict')?.split(',') ?? ['id'];
+          const before = route.request().headers().prefer?.includes('resolution=merge-duplicates')
+            ? this.state.tables[table].find((row) => conflict.every((column) => value[column] !== undefined && row[column] === value[column])) : undefined;
+          return { before, after: { id: `pending-${index}`, ...(table === 'collections' ? { is_recent: false, description_alignment: 'justify' } : { is_available: true }), ...before, ...value } };
+        })
+        : rows.map((before) => ({ before, after: method === 'DELETE' ? undefined : { ...before, ...body } }));
+      const failure = this.catalogConstraintError(table, changes);
+      if (failure) return this.respond(route, failure.code === '23505' ? 409 : 400, failure);
+    }
     if (method === 'POST') {
       rows = (Array.isArray(body) ? body : [body]).map((value: MockRow) => {
         const conflict = url.searchParams.get('on_conflict')?.split(',') ?? ['id'];
         const existing = this.state.tables[table].find((row) => conflict.every((column) => value[column] !== undefined && row[column] === value[column]));
         if (existing && route.request().headers().prefer?.includes('resolution=merge-duplicates')) {
           Object.assign(existing, value);
+          if (table === 'collections' && existing.is_recent) existing.sort_order = -1;
           return existing;
         }
-        const row = { id: `test-${table}-${this.nextId++}`, translations: {}, is_published: true, ...value };
+        const row: MockRow = { id: `test-${table}-${this.nextId++}`, translations: {}, is_published: true,
+          ...(table === 'collections' ? { is_recent: false, description_alignment: 'justify' } : table === 'artworks' ? { is_available: true } : {}), ...value };
+        if (table === 'collections' && row.is_recent) row.sort_order = -1;
         this.state.tables[table].push(row);
         return row;
       });
     } else if (method === 'PATCH') {
-      rows.forEach((row) => Object.assign(row, body));
+      rows.forEach((row) => {
+        Object.assign(row, body);
+        if (table === 'collections' && row.is_recent) row.sort_order = -1;
+      });
     } else if (method === 'DELETE') {
       const ids = new Set(rows.map((row) => row.id));
       this.state.tables[table] = this.state.tables[table].filter((row) => !ids.has(row.id));
@@ -246,6 +420,43 @@ export class MockSupabaseBackend {
     const single = route.request().headers().accept?.includes('application/vnd.pgrst.object+json');
     if (single && rows.length !== 1) return this.respond(route, 406, { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned', details: `The result contains ${rows.length} rows` });
     return this.respond(route, method === 'POST' ? 201 : 200, single ? rows[0] : rows);
+  }
+
+  private catalogConstraintError(table: string, changes: Array<{ before?: MockRow; after?: MockRow }>): { code: string; message: string } | null {
+    for (const { before, after } of changes) {
+      if (table === 'collections') {
+        if (after && Object.hasOwn(after, 'description_alignment')) {
+          if (after.description_alignment == null) return { code: '23502', message: 'null value in column "description_alignment" violates not-null constraint' };
+          if (!['justify', 'center'].includes(after.description_alignment)) return { code: '23514', message: 'new row violates check constraint "collections_description_alignment_check"' };
+        }
+        if (before && after && before.support_kind !== after.support_kind) return { code: '23514', message: 'COLLECTION_BRANCH_IMMUTABLE' };
+        if (before && after && Boolean(before.is_recent) !== Boolean(after.is_recent)) return { code: '23514', message: 'RECENT_COLLECTION_PROTECTED' };
+        if (before?.is_recent) {
+          if (!after || ['id', 'title', 'slug', 'source', 'is_recent'].some((key) => before[key] !== after[key])) {
+            return { code: '23514', message: 'RECENT_COLLECTION_PROTECTED' };
+          }
+          const languages = new Set([...Object.keys(before.translations ?? {}), ...Object.keys(after.translations ?? {})]);
+          if ([...languages].some((language) => (before.translations?.[language]?.title ?? null) !== (after.translations?.[language]?.title ?? null))) {
+            return { code: '23514', message: 'RECENT_COLLECTION_PROTECTED' };
+          }
+        }
+      }
+      if (table === 'artworks' && after) {
+        const target = this.state.tables.collections.find((row) => row.id === after.collection_id);
+        if (!target) return { code: '23503', message: 'Artwork collection does not exist' };
+        if (before && before.collection_id !== after.collection_id) {
+          const source = this.state.tables.collections.find((row) => row.id === before.collection_id);
+          if (source?.support_kind !== target.support_kind) return { code: '23514', message: 'ARTWORK_BRANCH_MISMATCH' };
+        }
+      }
+    }
+    if (table === 'collections') {
+      const replacedIds = new Set(changes.map(({ before }) => before?.id).filter(Boolean));
+      const prospective = [...this.state.tables.collections.filter((row) => !replacedIds.has(row.id)), ...changes.flatMap(({ after }) => after ? [after] : [])];
+      const recentBranches = prospective.filter((row) => row.is_recent).map((row) => row.support_kind);
+      if (new Set(recentBranches).size !== recentBranches.length) return { code: '23505', message: 'Only one recent collection is allowed per support branch' };
+    }
+    return null;
   }
 
   private denied(route: Route) { return this.respond(route, 403, { code: '42501', message: 'new row violates row-level security policy' }); }

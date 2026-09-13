@@ -11,13 +11,14 @@ import { translateEditorialContent } from "../data/editorialTranslations";
 import type { CurrentArtwork, CurrentPage } from "../types/currentSite";
 import type { NewsItem } from "../types/domain";
 import type { SupportKind } from "../types/support";
+import { selectSupportCollections } from "../lib/supportCollections";
 import { useSitePreferences } from "./sitePreferences";
 import { useAdminSession } from "./adminSession";
 
 type EditableContentContextValue = EditableContentSnapshot & {
   error: string | null;
   isLoading: boolean;
-  refreshContent: () => Promise<void>;
+  refreshContent: (confirmedSnapshot?: EditableContentSnapshot) => Promise<void>;
   source: EditableContentSnapshot;
   getPage: (kind: CurrentPage["kind"]) => CurrentPage | null;
   getSupportCollections: (kind: SupportKind) => EditableCollection[];
@@ -31,31 +32,44 @@ export function EditableContentProvider({ children }: { children: ReactNode }) {
   const { isAdmin, isEditMode, session } = useAdminSession();
   const accessScope = isAdmin && session ? session.user.id : "public";
   const requestSequence = useRef(0);
-  const [snapshot, setSnapshot] = useState<EditableContentSnapshot | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const activeScope = useRef(accessScope);
+  activeScope.current = accessScope;
+  const [contentState, setContentState] = useState<{
+    scope: string | null;
+    snapshot: EditableContentSnapshot | null;
+    isLoading: boolean;
+    error: string | null;
+  }>({ scope: null, snapshot: null, isLoading: true, error: null });
 
-  const refreshContent = useCallback(async () => {
+  const refreshContent = useCallback(async (confirmedSnapshot?: EditableContentSnapshot) => {
+    if (activeScope.current !== accessScope) return;
     const requestId = ++requestSequence.current;
-    setIsLoading(true);
-    setError(null);
+    setContentState((previous) => ({
+      scope: accessScope,
+      snapshot: previous.scope === accessScope ? previous.snapshot : null,
+      isLoading: true,
+      error: null,
+    }));
 
     try {
-      const nextSnapshot = await loadEditableContent();
-      if (requestId === requestSequence.current) setSnapshot(nextSnapshot);
+      const nextSnapshot = confirmedSnapshot ?? await loadEditableContent();
+      if (requestId === requestSequence.current && activeScope.current === accessScope) {
+        setContentState({ scope: accessScope, snapshot: nextSnapshot, isLoading: false, error: null });
+      }
     } catch (contentError) {
-      if (requestId !== requestSequence.current) return;
-      setError(getEditableOperationErrorMessage(contentError, "No se pudo cargar el contenido editable."));
-      setSnapshot(getEmptyEditableContentSnapshot());
-    } finally {
-      if (requestId === requestSequence.current) setIsLoading(false);
+      if (requestId !== requestSequence.current || activeScope.current !== accessScope) return;
+      setContentState({
+        scope: accessScope,
+        snapshot: getEmptyEditableContentSnapshot(),
+        isLoading: false,
+        error: getEditableOperationErrorMessage(contentError, "No se pudo cargar el contenido editable."),
+      });
     }
-  }, []);
+  }, [accessScope]);
 
   useEffect(() => {
     // RLS returns different rows to visitors and admins. Discard the previous
     // identity's snapshot and ignore in-flight responses from an earlier load.
-    setSnapshot(null);
     void refreshContent();
     return () => { requestSequence.current += 1; };
   }, [accessScope, refreshContent]);
@@ -63,43 +77,24 @@ export function EditableContentProvider({ children }: { children: ReactNode }) {
   const emptySnapshot = useMemo(() => getEmptyEditableContentSnapshot(), []);
 
   const value = useMemo(() => {
-    const source = snapshot ?? emptySnapshot;
+    // Mask another identity's data during render, before child effects can
+    // initialize an editing draft from the previous visitor/admin snapshot.
+    const matchesScope = contentState.scope === accessScope;
+    const source = matchesScope ? contentState.snapshot ?? emptySnapshot : emptySnapshot;
     const translatedSnapshot = translateEditorialContent(source, language);
     const currentSnapshot = isEditMode ? translatedSnapshot : hideUnpublishedContent(translatedSnapshot);
 
     return {
       ...currentSnapshot,
-      error,
+      error: matchesScope ? contentState.error : null,
       source,
       getPage(kind: CurrentPage["kind"]) {
         return currentSnapshot.pages.find((page) => page.kind === kind && page.isPublished) ?? null;
       },
-      isLoading,
+      isLoading: !matchesScope || contentState.isLoading,
       refreshContent,
       getSupportCollections(kind: SupportKind) {
-        return currentSnapshot.collections
-          .filter((collection) => collection.supportKind === kind && collection.isPublished)
-          .map((collection) =>
-            kind === "canvas" && collection.source === "legacy-wordpress"
-              ? {
-                  ...collection,
-                  artworks: collection.artworks.filter((artwork) =>
-                    normalizeSupportText([artwork.technique, artwork.caption, artwork.description].filter(Boolean).join(" ")).includes(
-                      "lienzo",
-                    ),
-                  ),
-                }
-              : collection,
-          )
-          .filter((collection) => kind === "paper" || collection.source !== "legacy-wordpress" || collection.artworks.length > 0)
-          .filter(
-            (collection, index, collections) =>
-              collections.findIndex(
-                (candidate) =>
-                  candidate.slug === collection.slug && candidate.supportKind === collection.supportKind && candidate.source !== "legacy-wordpress",
-              ) === -1 || collection.source !== "legacy-wordpress",
-          )
-          .sort((a, b) => a.sortOrder - b.sortOrder);
+        return selectSupportCollections(currentSnapshot.collections, kind);
       },
       getSupportCollection(kind: SupportKind, slug: string) {
         return (
@@ -109,7 +104,7 @@ export function EditableContentProvider({ children }: { children: ReactNode }) {
         );
       },
     };
-  }, [emptySnapshot, error, isEditMode, isLoading, language, refreshContent, snapshot]);
+  }, [accessScope, contentState, emptySnapshot, isEditMode, language, refreshContent]);
 
   return <EditableContentContext.Provider value={value}>{children}</EditableContentContext.Provider>;
 }
@@ -131,13 +126,6 @@ function hideUnpublishedContent(snapshot: EditableContentSnapshot): EditableCont
     pages: snapshot.pages.filter((page) => page.isPublished),
     photoItems: snapshot.photoItems.filter((item) => item.isPublished),
   };
-}
-
-function normalizeSupportText(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
 }
 
 export function useEditableContent() {

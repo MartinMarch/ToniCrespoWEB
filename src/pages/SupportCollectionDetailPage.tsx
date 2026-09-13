@@ -7,6 +7,7 @@ import { ArtworkShowcaseList } from "../components/artworks/ArtworkShowcaseList"
 import { ArtworkEditorDialog } from "../components/admin/ContentEditorDialogs";
 import { ConfirmDialog } from "../components/admin/AdminUi";
 import { BreadcrumbTrail } from "../components/navigation/BreadcrumbTrail";
+import { CollectionDescription } from "../components/support/CollectionDescription";
 import { PageLoader } from "../components/ui/Loaders";
 import type { SupportKind } from "../types/support";
 import { deleteArtwork, getEditableOperationErrorMessage, updateArtworkVisibility } from "../services/editableContentService";
@@ -109,6 +110,7 @@ export function SupportCollectionDetailPage({ kind }: SupportCollectionDetailPag
             ]}
           />
           <h1>{currentCollection.title}</h1>
+          <CollectionDescription description={currentCollection.description} alignment={currentCollection.descriptionAlignment} />
         </div>
         {operationError ? <p className="editor-operation-feedback" role="alert">{operationError}</p> : null}
         <ArtworkShowcaseList

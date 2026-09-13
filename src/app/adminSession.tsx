@@ -21,7 +21,8 @@ const AdminSessionContext = createContext<AdminSessionContextValue | null>(null)
 
 export function AdminSessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [verifiedAdminUserId, setVerifiedAdminUserId] = useState<string | null>(null);
+  const isAdmin = Boolean(session && verifiedAdminUserId === session.user.id);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +39,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       if (!nextSession) {
-        setIsAdmin(false);
+        setVerifiedAdminUserId(null);
         setIsEditMode(false);
       }
     });
@@ -53,7 +54,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
 
     async function checkAdminAccess() {
       if (!supabase || !session) {
-        setIsAdmin(false);
+        setVerifiedAdminUserId(null);
         setIsEditMode(false);
         return;
       }
@@ -61,7 +62,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
       const allowed = await hasAdminAccess();
       if (isCancelled) return;
 
-      setIsAdmin(allowed);
+      setVerifiedAdminUserId(allowed ? session.user.id : null);
       if (!allowed) {
         setIsEditMode(false);
       }
@@ -96,14 +97,14 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     if (!allowed) {
       await supabase.auth.signOut();
       setSession(null);
-      setIsAdmin(false);
+      setVerifiedAdminUserId(null);
       setIsEditMode(false);
       setError("Este usuario no tiene permisos de administración.");
       return;
     }
 
     setSession(data.session);
-    setIsAdmin(true);
+    setVerifiedAdminUserId(data.session?.user.id ?? null);
     setIsLoginOpen(false);
     setIsEditMode(true);
   }, []);
@@ -112,6 +113,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     setError(null);
     await supabase?.auth.signOut();
     setSession(null);
+    setVerifiedAdminUserId(null);
     setIsEditMode(false);
   }, []);
 
@@ -130,7 +132,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     () => ({
       error,
       isAdmin,
-      isEditMode,
+      isEditMode: isAdmin && isEditMode,
       isLoginOpen,
       isSupabaseReady: isSupabaseConfigured,
       session,

@@ -7,6 +7,7 @@ import { useSitePreferences } from "../app/sitePreferences";
 import { CollectionEditorDialog } from "../components/admin/ContentEditorDialogs";
 import { ConfirmDialog, EditIconButton } from "../components/admin/AdminUi";
 import { BreadcrumbTrail } from "../components/navigation/BreadcrumbTrail";
+import { CollectionDescription } from "../components/support/CollectionDescription";
 import { LoadingImage, PageLoader } from "../components/ui/Loaders";
 import {
   deleteCollection,
@@ -40,7 +41,7 @@ export function SupportPage({ kind }: SupportPageProps) {
     : null;
 
   async function handleDeleteCollection() {
-    if (!collectionToDelete) return;
+    if (!collectionToDelete || collectionToDelete.isRecent) return;
 
     setOperationError(null);
     setIsDeletingCollection(true);
@@ -106,7 +107,7 @@ export function SupportPage({ kind }: SupportPageProps) {
         />
       ) : null}
 
-      {collectionToEdit ? (
+      {collectionToEdit && !collectionToEdit.isRecent ? (
         <CollectionEditorDialog
           collection={collectionToEdit}
           supportKind={kind}
@@ -115,7 +116,7 @@ export function SupportPage({ kind }: SupportPageProps) {
         />
       ) : null}
 
-      {collectionToDelete ? (
+      {collectionToDelete && !collectionToDelete.isRecent ? (
         <ConfirmDialog
           title="Eliminar colección"
           description={getCollectionDeleteDescription(collectionToDelete)}
@@ -197,16 +198,17 @@ function CollectionPreviewLink({
             </span>
           )}
         </span>
-        <span className="support-collection-preview-card__details">
+        <div className="support-collection-preview-card__details">
           <span className="support-collection-preview-card__title">{group.title}</span>
+          <CollectionDescription description={group.description} alignment={group.descriptionAlignment} compact />
           {group.artworks.length > 0 ? (
             <span className="support-collection-preview-card__count">
               {group.artworks.length} {artworkCountLabel}
             </span>
           ) : null}
-        </span>
+        </div>
       </Link>
-      {isEditing ? (
+      {isEditing && !group.isRecent ? (
         <>
           <EditIconButton
             className="editor-media-target__action editor-media-target__action--edit"

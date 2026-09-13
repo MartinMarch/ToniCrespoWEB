@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { loadSiteSettings } from "../services/siteSettingsService";
-import { defaultSiteSettings, type SiteContactSettings } from "../types/siteSettings";
+import { normalizeGradientSettings } from "../lib/siteGradient";
+import { defaultSiteSettings, type SiteContactSettings, type SiteGradientSettings, type SiteSettings } from "../types/siteSettings";
 
 export type SiteLanguage = "es" | "en" | "de" | "ca";
 export type MeasurementUnit = "cm" | "in";
@@ -43,6 +44,8 @@ const translations = {
     contact: {
       artworkDialogTitle: "Contactar por la obra",
       artworkSubjectPrefix: "Interés en la obra",
+      artworkInquirySubjectPrefix: "Consulta sobre la obra",
+      unavailableNotice: "Esta obra no está disponible. Puedes contactar con el artista para hacer una consulta.",
       cancel: "Cancelar",
       close: "Cerrar",
       defaultSubject: "Consulta desde la web de Toni Crespo",
@@ -80,6 +83,9 @@ const translations = {
       viewFullscreen: "Ver a pantalla completa",
       viewArtworkInRooms: "Ver obra colocada en ambientes",
       interest: "Me interesa / contacta con el artista por esta obra",
+      inquire: "Consultar sobre esta obra",
+      inquiryMessagePrefix: "Hola Toni, quisiera consultar sobre esta obra:",
+      inquiryMessageSuffix: "He visto que no está disponible. ¿Podrías darme más información?",
       interestMessagePrefix: "Hola Toni, me interesa esta obra:",
       interestMessageSuffix: "¿Podrías darme más información?",
       search: "Buscar",
@@ -104,6 +110,7 @@ const translations = {
       emptyCollection: "Colección sin obras",
       artworkSingular: "obra",
       artworkPlural: "obras",
+      artworkUnavailable: "No disponible",
     },
     aria: {
       mainNav: "Navegacion principal",
@@ -161,6 +168,8 @@ const translations = {
     contact: {
       artworkDialogTitle: "Contact about artwork",
       artworkSubjectPrefix: "Interest in artwork",
+      artworkInquirySubjectPrefix: "Enquiry about the artwork",
+      unavailableNotice: "This artwork is unavailable. You can still contact the artist with a question.",
       cancel: "Cancel",
       close: "Close",
       defaultSubject: "Enquiry from Toni Crespo's website",
@@ -198,6 +207,9 @@ const translations = {
       viewFullscreen: "View full screen",
       viewArtworkInRooms: "View artwork in room settings",
       interest: "I am interested / contact the artist about this artwork",
+      inquire: "Enquire about this artwork",
+      inquiryMessagePrefix: "Hello Toni, I would like to enquire about this artwork:",
+      inquiryMessageSuffix: "I understand it is unavailable. Could you share more information?",
       interestMessagePrefix: "Hello Toni, I am interested in this artwork:",
       interestMessageSuffix: "Could you send me more information?",
       search: "Search",
@@ -222,6 +234,7 @@ const translations = {
       emptyCollection: "Collection without artworks",
       artworkSingular: "artwork",
       artworkPlural: "artworks",
+      artworkUnavailable: "Unavailable",
     },
     aria: {
       mainNav: "Main navigation",
@@ -279,6 +292,8 @@ const translations = {
     contact: {
       artworkDialogTitle: "Zum Werk Kontakt aufnehmen",
       artworkSubjectPrefix: "Interesse an dem Werk",
+      artworkInquirySubjectPrefix: "Anfrage zum Werk",
+      unavailableNotice: "Dieses Werk ist nicht verfügbar. Du kannst den Künstler dennoch bei Fragen kontaktieren.",
       cancel: "Abbrechen",
       close: "Schließen",
       defaultSubject: "Anfrage über die Website von Toni Crespo",
@@ -316,6 +331,9 @@ const translations = {
       viewFullscreen: "Vollbild anzeigen",
       viewArtworkInRooms: "Werk in Raumansichten anzeigen",
       interest: "Ich bin interessiert / den Künstler zu diesem Werk kontaktieren",
+      inquire: "Zu diesem Werk anfragen",
+      inquiryMessagePrefix: "Hallo Toni, ich habe eine Frage zu diesem Werk:",
+      inquiryMessageSuffix: "Ich habe gesehen, dass es nicht verfügbar ist. Könntest du mir weitere Informationen geben?",
       interestMessagePrefix: "Hallo Toni, ich interessiere mich für dieses Werk:",
       interestMessageSuffix: "Könntest du mir weitere Informationen senden?",
       search: "Suchen",
@@ -340,6 +358,7 @@ const translations = {
       emptyCollection: "Sammlung ohne Werke",
       artworkSingular: "Werk",
       artworkPlural: "Werke",
+      artworkUnavailable: "Nicht verfügbar",
     },
     aria: {
       mainNav: "Hauptnavigation",
@@ -397,6 +416,8 @@ const translations = {
     contact: {
       artworkDialogTitle: "Contactar per l'obra",
       artworkSubjectPrefix: "Interès en l'obra",
+      artworkInquirySubjectPrefix: "Consulta sobre l’obra",
+      unavailableNotice: "Aquesta obra no està disponible. Pots contactar amb l’artista per fer una consulta.",
       cancel: "Cancel·lar",
       close: "Tancar",
       defaultSubject: "Consulta des del web de Toni Crespo",
@@ -434,6 +455,9 @@ const translations = {
       viewFullscreen: "Veure a pantalla completa",
       viewArtworkInRooms: "Veure l'obra col·locada en ambients",
       interest: "M'interessa / contacta amb l'artista per aquesta obra",
+      inquire: "Consultar sobre aquesta obra",
+      inquiryMessagePrefix: "Hola Toni, voldria consultar sobre aquesta obra:",
+      inquiryMessageSuffix: "He vist que no està disponible. Em podries donar més informació?",
       interestMessagePrefix: "Hola Toni, m'interessa aquesta obra:",
       interestMessageSuffix: "Em podries enviar més informació?",
       search: "Cercar",
@@ -458,6 +482,7 @@ const translations = {
       emptyCollection: "Col·lecció sense obres",
       artworkSingular: "obra",
       artworkPlural: "obres",
+      artworkUnavailable: "No disponible",
     },
     aria: {
       mainNav: "Navegació principal",
@@ -497,10 +522,11 @@ export type SiteLabels = (typeof translations)[SiteLanguage];
 type SitePreferencesContextValue = {
   contactSettings: SiteContactSettings;
   defaultLanguage: SiteLanguage;
+  gradientSettings: SiteGradientSettings;
   language: SiteLanguage;
   labels: SiteLabels;
   measurementUnit: MeasurementUnit;
-  refreshSiteSettings: () => Promise<void>;
+  refreshSiteSettings: (savedSettings?: SiteSettings) => Promise<void>;
   setLanguage: (language: SiteLanguage) => void;
   setMeasurementUnit: (unit: MeasurementUnit) => void;
 };
@@ -513,11 +539,16 @@ export function SitePreferencesProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<SiteLanguage>(() => readStoredLanguage() ?? defaultSiteSettings.defaultLanguage);
   const [measurementUnit, setMeasurementUnit] = useState<MeasurementUnit>(() => readStoredMeasurementUnit());
   const [siteSettings, setSiteSettings] = useState(defaultSiteSettings);
+  // An already-open development tab can still hold the previous settings shape.
+  // Normalize before rendering/effect dependencies, not only after a database read.
+  const gradientSettings = useMemo(() => normalizeGradientSettings(siteSettings.gradient), [siteSettings.gradient]);
   const [areSiteSettingsLoaded, setAreSiteSettingsLoaded] = useState(false);
   const labels = translations[language];
 
-  const refreshSiteSettings = useCallback(async () => {
-    const nextSettings = await loadSiteSettings();
+  const refreshSiteSettings = useCallback(async (savedSettings?: SiteSettings) => {
+    // A successful save already returns the confirmed row. Avoid a second read
+    // whose temporary failure could otherwise replace the saved colors with defaults.
+    const nextSettings = savedSettings ?? await loadSiteSettings();
     setSiteSettings(nextSettings);
     setAreSiteSettingsLoaded(true);
 
@@ -542,10 +573,21 @@ export function SitePreferencesProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(preferenceStorageKeys.measurementUnit, measurementUnit);
   }, [measurementUnit]);
 
+  useEffect(() => {
+    const style = document.documentElement.style;
+    style.setProperty("--gradient-start", gradientSettings.startColor);
+    style.setProperty("--gradient-end", gradientSettings.endColor);
+    return () => {
+      style.removeProperty("--gradient-start");
+      style.removeProperty("--gradient-end");
+    };
+  }, [gradientSettings.startColor, gradientSettings.endColor]);
+
   const value = useMemo(
     () => ({
       contactSettings: siteSettings.contact,
       defaultLanguage: siteSettings.defaultLanguage,
+      gradientSettings,
       language,
       labels,
       measurementUnit,
@@ -553,7 +595,7 @@ export function SitePreferencesProvider({ children }: { children: ReactNode }) {
       setLanguage,
       setMeasurementUnit,
     }),
-    [labels, language, measurementUnit, refreshSiteSettings, siteSettings],
+    [gradientSettings, labels, language, measurementUnit, refreshSiteSettings, siteSettings],
   );
 
   return <SitePreferencesContext.Provider value={value}>{children}</SitePreferencesContext.Provider>;

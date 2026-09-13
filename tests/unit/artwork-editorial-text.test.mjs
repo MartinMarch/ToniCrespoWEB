@@ -39,6 +39,7 @@ function renderArtwork(artwork, fullscreen = false) {
     useContactDialog: () => ({ openArtworkContact: () => {} }),
     LoadingImage: props => React.createElement("img", props),
     ArtworkDimensions: ({ value }) => React.createElement("p", { className: "artwork-dimensions" }, value),
+    ArtworkAvailability: () => null,
   };
   runInNewContext(showcaseCode, environment);
   return renderToStaticMarkup(React.createElement(environment.exports.ArtworkShowcaseList, { artworks: [artwork] }));

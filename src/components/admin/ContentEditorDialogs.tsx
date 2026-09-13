@@ -1,35 +1,33 @@
-import { useRef, useState, type FormEvent } from "react";
-import { Bold, ImagePlus, Italic, List, ListOrdered, LoaderCircle, Save, Upload } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Bold, Italic, List, ListOrdered, LoaderCircle, Save, Upload } from "lucide-react";
 import { getEditorialPageTranslations } from "../../data/editorialTranslations";
 import { useSitePreferences } from "../../app/sitePreferences";
 import {
   cleanupOwnedEditableAssets,
   createArtwork,
   createCollection,
-  createNewsItem,
   getEditableOperationErrorMessage,
   getImageDimensions,
   updateArtwork,
   updateCollection,
-  updateNewsItem,
   updatePhotographyItem,
   uploadEditableAsset,
-  uploadEditableAssets,
   type EditableCollection,
 } from "../../services/editableContentService";
 import type { SupportKind } from "../../types/support";
+import type { CollectionDescriptionAlignment } from "../../types/collectionPresentation";
+import { CollectionDescription } from "../support/CollectionDescription";
 import type { CurrentArtwork } from "../../types/currentSite";
-import type { NewsItem } from "../../types/domain";
 import { contentLocales } from "../../types/localization";
 import type {
   ArtworkTranslations,
   CollectionTranslations,
   LocalizedFields,
-  NewsTranslations,
   PageTranslations,
   PhotographyTranslations,
 } from "../../types/localization";
 import { AdminDialog, FormMessage } from "./AdminUi";
+import "../../styles/artwork-availability.css";
 import {
   createLocaleValues,
   toStoredTranslations,
@@ -178,194 +176,13 @@ export function BiographyTextDialog({ html, onClose, onSave, poem, translations 
   );
 }
 
-type NewsEditorDialogProps = {
-  newsItem?: NewsItem;
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-};
-
-type NewsFields = {
-  title: string;
-  dateText: string;
-  location: string;
-  description: string;
-  imageAlt: string;
-};
-
-const emptyNewsFields: NewsFields = {
-  title: "",
-  dateText: "",
-  location: "",
-  description: "",
-  imageAlt: "",
-};
-
-const newsCategories: Array<{ value: NewsItem["category"]; label: string }> = [
-  { value: "exposicion", label: "Exposición" },
-  { value: "premio", label: "Premio" },
-  { value: "entrevista", label: "Entrevista" },
-  { value: "publicacion", label: "Publicación" },
-  { value: "evento", label: "Evento" },
-  { value: "television", label: "Televisión" },
-];
-
-export function NewsEditorDialog({ newsItem, onClose, onSaved }: NewsEditorDialogProps) {
-  const [activeLocale, setActiveLocale] = useState<EditorLocale>("es");
-  const [values, setValues] = useState<LocaleValues<NewsFields>>(() =>
-    createLocaleValues<NewsFields>(
-      getNewsFields(newsItem),
-      newsItem?.translations as unknown as LocalizedFields<NewsFields> | undefined,
-    ),
-  );
-  const [publishedAt, setPublishedAt] = useState(() => newsItem?.publishedAt ?? new Date().toISOString().slice(0, 10));
-  const [category, setCategory] = useState<NewsItem["category"]>(() => newsItem?.category ?? "evento");
-  const [externalUrl, setExternalUrl] = useState(() => newsItem?.externalUrl ?? "");
-  const [files, setFiles] = useState<File[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  function updateField(field: keyof NewsFields, value: string) {
-    setValues((current) => ({
-      ...current,
-      [activeLocale]: { ...current[activeLocale], [field]: value },
-    }));
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!values.es.title.trim()) {
-      setError(`Completa el título en español antes de ${newsItem ? "guardar" : "crear"} la noticia.`);
-      return;
-    }
-
-    setError(null);
-    setIsSubmitting(true);
-    let imageUrls: string[] = [];
-    let isCreated = false;
-
-    try {
-      if (newsItem) {
-        await updateNewsItem({
-          id: newsItem.id,
-          title: values.es.title,
-          publishedAt,
-          dateText: values.es.dateText,
-          category,
-          location: values.es.location,
-          description: values.es.description,
-          externalUrl,
-          imageAlt: values.es.imageAlt || values.es.title,
-          translations: toStoredTranslations(values) as NewsTranslations,
-        });
-      } else {
-        imageUrls = await uploadEditableAssets("news", files);
-        await createNewsItem({
-          title: values.es.title,
-          publishedAt,
-          dateText: values.es.dateText,
-          category,
-          location: values.es.location,
-          description: values.es.description,
-          externalUrl,
-          imageAlt: values.es.imageAlt || values.es.title,
-          imageUrls,
-          translations: toStoredTranslations(values) as NewsTranslations,
-        });
-        isCreated = true;
-      }
-      await onSaved();
-      onClose();
-    } catch (submitError) {
-      if (!isCreated) await cleanupOwnedEditableAssets(imageUrls);
-      setError(getErrorMessage(submitError));
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  const fields = values[activeLocale];
-
-  return (
-    <AdminDialog title={newsItem ? "Editar noticia" : "Añadir noticia"} onClose={isSubmitting ? () => undefined : onClose} className="admin-dialog--wide">
-      <form className="admin-form admin-form--dialog admin-form--grid" onSubmit={handleSubmit}>
-        <label>
-          Fecha
-          <input type="date" value={publishedAt} onChange={(event) => setPublishedAt(event.target.value)} />
-        </label>
-        <label>
-          Categoría
-          <select value={category} onChange={(event) => setCategory(event.target.value as NewsItem["category"])}>
-            {newsCategories.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-          </select>
-        </label>
-        <label className="admin-form__wide">
-          Enlace externo
-          <input type="url" value={externalUrl} onChange={(event) => setExternalUrl(event.target.value)} />
-        </label>
-        {!newsItem ? (
-          <label className="admin-form__wide admin-file-field">
-            <ImagePlus aria-hidden="true" />
-            <span>Imágenes</span>
-            <input type="file" accept="image/*" multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
-            {files.length > 0 ? <small>{files.length} {files.length === 1 ? "imagen seleccionada" : "imágenes seleccionadas"}</small> : null}
-          </label>
-        ) : null}
-        <div className="admin-form__wide">
-          <TranslationTabs
-            activeLocale={activeLocale}
-            onSelect={setActiveLocale}
-            isComplete={(locale) => Boolean(values[locale].title.trim())}
-          >
-            <label>
-              Título
-              <input value={fields.title} onChange={(event) => updateField("title", event.target.value)} required={activeLocale === "es"} />
-            </label>
-            <label>
-              Fecha visible
-              <input value={fields.dateText} onChange={(event) => updateField("dateText", event.target.value)} placeholder="Marzo 2026" />
-            </label>
-            <label>
-              Ubicación
-              <input value={fields.location} onChange={(event) => updateField("location", event.target.value)} />
-            </label>
-            <label>
-              Texto alternativo de imágenes
-              <input value={fields.imageAlt} onChange={(event) => updateField("imageAlt", event.target.value)} />
-            </label>
-            <label>
-              Descripción
-              <textarea rows={5} value={fields.description} onChange={(event) => updateField("description", event.target.value)} />
-            </label>
-          </TranslationTabs>
-        </div>
-        <FormMessage error={error} />
-        <div className="admin-dialog__actions admin-form__wide">
-          <button type="button" className="admin-secondary-button" disabled={isSubmitting} onClick={onClose}>Cancelar</button>
-          <button type="submit" className="admin-primary-button" disabled={isSubmitting}>
-            {isSubmitting ? <LoaderCircle className="admin-button-spinner" aria-hidden="true" /> : <Save aria-hidden="true" />}
-            {isSubmitting ? "Guardando..." : newsItem ? "Guardar noticia" : "Crear noticia"}
-          </button>
-        </div>
-      </form>
-    </AdminDialog>
-  );
-}
-
-function getNewsFields(newsItem?: NewsItem): NewsFields {
-  if (!newsItem) return emptyNewsFields;
-
-  return {
-    title: newsItem.title,
-    dateText: newsItem.dateText ?? "",
-    location: newsItem.location ?? "",
-    description: newsItem.description ?? "",
-    imageAlt: newsItem.imageAlt ?? newsItem.title,
-  };
-}
+export { NewsEditorDialog } from "./NewsEditorDialog";
 
 type CollectionEditorDialogProps = {
   collection?: EditableCollection;
   supportKind: SupportKind;
+  isActive?: boolean;
+  onPendingChange?: (pending: boolean) => void;
   onClose: () => void;
   onSaved: () => Promise<void> | void;
 };
@@ -373,19 +190,23 @@ type CollectionEditorDialogProps = {
 type CollectionFields = { title: string; description: string };
 const emptyCollectionFields: CollectionFields = { title: "", description: "" };
 
-export function CollectionEditorDialog({ collection, onClose, onSaved, supportKind }: CollectionEditorDialogProps) {
-  const [activeLocale, setActiveLocale] = useState<EditorLocale>("es");
+export function CollectionEditorDialog({ collection, isActive = true, onPendingChange, onClose, onSaved, supportKind }: CollectionEditorDialogProps) {
+  const { language } = useSitePreferences();
+  const [activeLocale, setActiveLocale] = useState<EditorLocale>(() => collection ? language : "es");
   const [values, setValues] = useState<LocaleValues<CollectionFields>>(() =>
     createLocaleValues(
       collection ? { title: collection.title, description: collection.description } : emptyCollectionFields,
       collection?.translations,
     ),
   );
+  const [descriptionAlignment, setDescriptionAlignment] = useState<CollectionDescriptionAlignment>(() => collection?.descriptionAlignment === "center" ? "center" : "justify");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const supportTitle = supportKind === "canvas" ? "lienzos" : "láminas";
+  const supportTitle = supportKind === "canvas" ? "lienzos" : "obra en papel";
+  useDialogPendingChange(isSubmitting, onPendingChange);
 
   function updateField(field: keyof CollectionFields, value: string) {
+    if (collection?.isRecent && field === "title") return;
     setValues((current) => ({
       ...current,
       [activeLocale]: { ...current[activeLocale], [field]: value },
@@ -403,17 +224,30 @@ export function CollectionEditorDialog({ collection, onClose, onSaved, supportKi
     setIsSubmitting(true);
     try {
       if (collection) {
+        const translations = toStoredTranslations(values) as CollectionTranslations;
+        if (collection.isRecent) {
+          for (const locale of contentLocales) {
+            const originalTitle = collection.translations?.[locale]?.title;
+            if (originalTitle !== undefined) {
+              translations[locale] = { ...translations[locale], title: originalTitle };
+            } else if (translations[locale]) {
+              delete translations[locale]!.title;
+            }
+          }
+        }
         await updateCollection({
           id: collection.id,
-          title: values.es.title,
+          title: collection.isRecent ? collection.title : values.es.title,
           description: values.es.description,
-          translations: toStoredTranslations(values) as CollectionTranslations,
+          descriptionAlignment,
+          translations,
         });
       } else {
         await createCollection({
           supportKind,
           title: values.es.title,
           description: values.es.description,
+          descriptionAlignment,
           translations: toStoredTranslations(values) as CollectionTranslations,
         });
       }
@@ -427,10 +261,12 @@ export function CollectionEditorDialog({ collection, onClose, onSaved, supportKi
   }
 
   const fields = values[activeLocale];
+  const previewDescription = fields.description.trim() ? fields.description : values.es.description;
 
   return (
-    <AdminDialog title={collection ? `Editar colección de ${supportTitle}` : `Nueva colección de ${supportTitle}`} onClose={isSubmitting ? () => undefined : onClose}>
+    <AdminDialog title={collection?.isRecent ? `Editar descripción de ${collection.title}` : collection ? `Editar colección de ${supportTitle}` : `Nueva colección de ${supportTitle}`} isActive={isActive} onClose={isSubmitting ? () => undefined : onClose}>
       <form className="admin-form admin-form--dialog" onSubmit={handleSubmit}>
+        {collection?.isRecent ? <p className="admin-form__message">Esta colección es permanente. Su nombre no se puede cambiar; puedes editar su descripción en cada idioma.</p> : null}
         <TranslationTabs
           activeLocale={activeLocale}
           onSelect={setActiveLocale}
@@ -438,13 +274,37 @@ export function CollectionEditorDialog({ collection, onClose, onSaved, supportKi
         >
           <label>
             Nombre
-            <input value={fields.title} onChange={(event) => updateField("title", event.target.value)} required={activeLocale === "es"} />
+            <input value={fields.title} onChange={(event) => updateField("title", event.target.value)} required={activeLocale === "es"} disabled={isSubmitting || collection?.isRecent === true} />
           </label>
           <label>
             Descripción
-            <textarea rows={5} value={fields.description} onChange={(event) => updateField("description", event.target.value)} />
+            <textarea rows={5} value={fields.description} onChange={(event) => updateField("description", event.target.value)} disabled={isSubmitting} />
           </label>
+          <p className="admin-form__message">La descripción aparece debajo del nombre en el listado de colecciones y al entrar en ella. Se conservan los saltos de línea. Editas el idioma seleccionado; las otras traducciones no se sustituyen.</p>
         </TranslationTabs>
+        <fieldset className="collection-description-alignment" disabled={isSubmitting}>
+          <legend>Alineación de la descripción</legend>
+          <div className="collection-description-alignment__options">
+            <label>
+              <input type="radio" name="collection-description-alignment" value="justify" checked={descriptionAlignment === "justify"} onChange={() => setDescriptionAlignment("justify")} />
+              Justificada
+            </label>
+            <label>
+              <input type="radio" name="collection-description-alignment" value="center" checked={descriptionAlignment === "center"} onChange={() => setDescriptionAlignment("center")} />
+              Centrada
+            </label>
+          </div>
+          <p className="admin-form__message">La alineación se aplica a todos los idiomas.</p>
+        </fieldset>
+        <section className="collection-description-preview" aria-label="Vista previa de la descripción">
+          <p className="admin-form__message">Vista previa de la descripción</p>
+          {previewDescription.trim() ? (
+            <CollectionDescription description={previewDescription} alignment={descriptionAlignment} compact />
+          ) : <p className="admin-form__message">Escribe una descripción para ver aquí cómo quedará.</p>}
+          {activeLocale !== "es" && !fields.description.trim() && values.es.description.trim() ? (
+            <p className="admin-form__message">Sin traducción en este idioma, se mostrará la descripción en español.</p>
+          ) : null}
+        </section>
         <FormMessage error={error} />
         <div className="admin-dialog__actions">
           <button type="button" className="admin-secondary-button" disabled={isSubmitting} onClick={onClose}>Cancelar</button>
@@ -462,6 +322,9 @@ type ArtworkEditorDialogProps = {
   artwork?: CurrentArtwork;
   collectionId: string;
   collectionTitle: string;
+  collectionOptions?: EditableCollection[];
+  isActive?: boolean;
+  onPendingChange?: (pending: boolean) => void;
   onClose: () => void;
   onSaved: () => Promise<void>;
 };
@@ -480,7 +343,7 @@ const emptyArtworkFields: ArtworkFields = {
   description: "",
 };
 
-export function ArtworkEditorDialog({ artwork, collectionId, collectionTitle, onClose, onSaved }: ArtworkEditorDialogProps) {
+export function ArtworkEditorDialog({ artwork, collectionId, collectionTitle, collectionOptions, isActive = true, onPendingChange, onClose, onSaved }: ArtworkEditorDialogProps) {
   const { language } = useSitePreferences();
   const [activeLocale, setActiveLocale] = useState<EditorLocale>(() => artwork ? language : "es");
   const [values, setValues] = useState<LocaleValues<ArtworkFields>>(() =>
@@ -490,9 +353,17 @@ export function ArtworkEditorDialog({ artwork, collectionId, collectionTitle, on
     ),
   );
   const [dimensions, setDimensions] = useState(() => artwork?.dimensions ?? "");
+  const [isAvailable, setIsAvailable] = useState(() => artwork?.isAvailable !== false);
+  const [isPublished, setIsPublished] = useState(() => artwork?.isPublished !== false);
+  const [selectedCollectionId, setSelectedCollectionId] = useState(collectionId);
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
+  useDialogPendingChange(isSubmitting, onPendingChange);
+  const initialSupportKind = collectionOptions?.find((collection) => collection.id === collectionId)?.supportKind;
+  const destinationCollections = collectionOptions?.filter((collection) => !initialSupportKind || collection.supportKind === initialSupportKind);
+  const destinationTitle = destinationCollections?.find((collection) => collection.id === selectedCollectionId)?.title ?? collectionTitle;
 
   function updateField(field: keyof ArtworkFields, value: string) {
     setValues((current) => ({
@@ -503,6 +374,16 @@ export function ArtworkEditorDialog({ artwork, collectionId, collectionTitle, on
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
+    if (hasSaved) {
+      // Reload failures must never repeat an already confirmed insert/update.
+      setIsSubmitting(true);
+      setError(null);
+      try { await onSaved(); onClose(); }
+      catch (reloadError) { setError(`La obra se ha guardado, pero no se ha podido recargar. ${getErrorMessage(reloadError)}`); }
+      finally { setIsSubmitting(false); }
+      return;
+    }
     if (!artwork && !file) {
       setError("Selecciona la imagen de la obra.");
       return;
@@ -511,14 +392,26 @@ export function ArtworkEditorDialog({ artwork, collectionId, collectionTitle, on
       setError(`Completa el título en español antes de ${artwork ? "guardar" : "añadir"} la obra.`);
       return;
     }
+    if (!artwork && destinationCollections && !destinationCollections.some((collection) => collection.id === selectedCollectionId)) {
+      setError("Selecciona una colección de destino válida.");
+      return;
+    }
 
     setError(null);
     setIsSubmitting(true);
     let imageUrl: string | null = null;
-    let isCreated = false;
+    let writeStarted = false;
+    let writeConfirmed = false;
 
     try {
+      let imageSize: { width: number | null; height: number | null } | null = null;
+      if (file) {
+        imageSize = await getImageDimensions(file);
+        if (!imageSize.width || !imageSize.height) throw new Error("No se ha podido leer la imagen. Selecciona una imagen válida.");
+        imageUrl = await uploadEditableAsset("artworks", file);
+      }
       if (artwork) {
+        writeStarted = true;
         await updateArtwork({
           id: artwork.id,
           title: values.es.title,
@@ -526,30 +419,39 @@ export function ArtworkEditorDialog({ artwork, collectionId, collectionTitle, on
           caption: values.es.caption,
           description: values.es.description,
           dimensions,
+          isAvailable,
+          isPublished,
+          ...(imageUrl && imageSize ? { replacementImage: { imageUrl, ...imageSize } } : {}),
           translations: toStoredTranslations(values) as ArtworkTranslations,
         });
       } else {
-        const imageSize = await getImageDimensions(file!);
-        imageUrl = await uploadEditableAsset("artworks", file!);
+        writeStarted = true;
         await createArtwork({
-          collectionId,
+          collectionId: selectedCollectionId,
           title: values.es.title,
           technique: values.es.technique,
           caption: values.es.caption,
           description: values.es.description,
           dimensions,
-          imageUrl,
-          width: imageSize.width,
-          height: imageSize.height,
+          isAvailable,
+          isPublished,
+          imageUrl: imageUrl!,
+          width: imageSize!.width,
+          height: imageSize!.height,
           translations: toStoredTranslations(values) as ArtworkTranslations,
         });
-        isCreated = true;
       }
+      writeConfirmed = true;
+      setHasSaved(true);
       await onSaved();
       onClose();
     } catch (submitError) {
-      if (!isCreated && imageUrl) await cleanupOwnedEditableAssets([imageUrl]);
-      setError(getErrorMessage(submitError));
+      // A lost response can hide a committed write. Keep its upload, and never
+      // delete old/shared images when replacing the photograph of one work.
+      if (!writeStarted && imageUrl) await cleanupOwnedEditableAssets([imageUrl]);
+      setError(writeConfirmed
+        ? `La obra se ha guardado, pero no se ha podido recargar. ${getErrorMessage(submitError)}`
+        : `${getErrorMessage(submitError)}${writeStarted ? " Si se interrumpió la conexión, recarga el catálogo antes de repetir para comprobar si llegó a guardarse." : ""}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -558,20 +460,34 @@ export function ArtworkEditorDialog({ artwork, collectionId, collectionTitle, on
   const fields = values[activeLocale];
 
   return (
-    <AdminDialog title={artwork ? `Editar obra de ${collectionTitle}` : `Añadir obra a ${collectionTitle}`} onClose={isSubmitting ? () => undefined : onClose} className="admin-dialog--wide">
+    <AdminDialog title={artwork ? `Editar obra de ${collectionTitle}` : `Añadir obra a ${destinationTitle}`} isActive={isActive} onClose={isSubmitting ? () => undefined : onClose} className="admin-dialog--wide">
       <form className="admin-form admin-form--dialog admin-form--grid" onSubmit={handleSubmit}>
-        <label>
-          Dimensiones
-          <input value={dimensions} onChange={(event) => setDimensions(event.target.value)} placeholder="140 x 140 cm" />
-        </label>
-        {!artwork ? (
-          <label className="admin-file-field">
-            <Upload aria-hidden="true" />
-            <span>Imagen de la obra</span>
-            <input type="file" accept="image/*" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
-            {file ? <small>{file.name}</small> : null}
+        {!artwork && destinationCollections ? (
+          <label className="admin-form__wide">
+            Colección
+            <select value={selectedCollectionId} onChange={(event) => setSelectedCollectionId(event.target.value)} disabled={isSubmitting || hasSaved} required>
+              {!destinationCollections.some((collection) => collection.id === selectedCollectionId) ? <option value="">Selecciona una colección</option> : null}
+              {destinationCollections.map((collection) => <option key={collection.id} value={collection.id}>{collection.title}</option>)}
+            </select>
           </label>
         ) : null}
+        <label>
+          Dimensiones
+          <input value={dimensions} onChange={(event) => setDimensions(event.target.value)} placeholder="140 x 140 cm" disabled={isSubmitting || hasSaved} />
+        </label>
+        <label className="admin-file-field">
+          <Upload aria-hidden="true" />
+          <span>Imagen de la obra</span>
+          <input type="file" accept="image/*" aria-label="Imagen de la obra" onChange={(event) => setFile(event.target.files?.[0] ?? null)} disabled={isSubmitting || hasSaved} />
+          {file ? <small>{file.name}</small> : artwork ? <small>Opcional: si no eliges una imagen, se mantiene la actual.</small> : null}
+          {artwork ? <small>La nueva imagen sustituirá la foto de esta ficha; los archivos anteriores se conservarán.</small> : null}
+        </label>
+        <fieldset className="artwork-editor-state admin-form__wide" disabled={isSubmitting || hasSaved}>
+          <legend>Estado de la obra</legend>
+          <label><input type="checkbox" checked={isAvailable} onChange={(event) => setIsAvailable(event.target.checked)} />Disponible</label>
+          <label><input type="checkbox" checked={isPublished} onChange={(event) => setIsPublished(event.target.checked)} />Visible al público</label>
+          <p>Una obra no disponible puede seguir visible. Desmarca «Visible al público» para ocultarla sin borrarla.</p>
+        </fieldset>
         <div className="admin-form__wide">
           <TranslationTabs
             activeLocale={activeLocale}
@@ -580,19 +496,19 @@ export function ArtworkEditorDialog({ artwork, collectionId, collectionTitle, on
           >
             <label>
               Título
-              <input value={fields.title} onChange={(event) => updateField("title", event.target.value)} required={activeLocale === "es"} />
+              <input value={fields.title} onChange={(event) => updateField("title", event.target.value)} required={activeLocale === "es"} disabled={isSubmitting || hasSaved} />
             </label>
             <label>
               Técnica
-              <input value={fields.technique} onChange={(event) => updateField("technique", event.target.value)} />
+              <input value={fields.technique} onChange={(event) => updateField("technique", event.target.value)} disabled={isSubmitting || hasSaved} />
             </label>
             <label>
               Pie de obra
-              <input value={fields.caption} onChange={(event) => updateField("caption", event.target.value)} />
+              <input value={fields.caption} onChange={(event) => updateField("caption", event.target.value)} disabled={isSubmitting || hasSaved} />
             </label>
             <label>
               Descripción
-              <textarea rows={5} value={fields.description} onChange={(event) => updateField("description", event.target.value)} />
+              <textarea rows={5} value={fields.description} onChange={(event) => updateField("description", event.target.value)} disabled={isSubmitting || hasSaved} />
             </label>
           </TranslationTabs>
         </div>
@@ -601,7 +517,7 @@ export function ArtworkEditorDialog({ artwork, collectionId, collectionTitle, on
           <button type="button" className="admin-secondary-button" disabled={isSubmitting} onClick={onClose}>Cancelar</button>
           <button type="submit" className="admin-primary-button" disabled={isSubmitting}>
             {isSubmitting ? <LoaderCircle className="admin-button-spinner" aria-hidden="true" /> : <Save aria-hidden="true" />}
-            {isSubmitting ? "Procesando..." : artwork ? "Guardar obra" : "Añadir obra"}
+            {isSubmitting ? "Procesando..." : hasSaved ? "Volver a cargar" : artwork ? "Guardar obra" : "Añadir obra"}
           </button>
         </div>
       </form>
@@ -618,6 +534,13 @@ function getArtworkFields(artwork?: CurrentArtwork): ArtworkFields {
     caption: artwork.caption,
     description: artwork.description,
   };
+}
+
+function useDialogPendingChange(isSubmitting: boolean, onPendingChange?: (pending: boolean) => void) {
+  useEffect(() => {
+    onPendingChange?.(isSubmitting);
+    return () => onPendingChange?.(false);
+  }, [isSubmitting, onPendingChange]);
 }
 
 type PhotographyEditorDialogProps = {
