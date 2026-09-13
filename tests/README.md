@@ -7,7 +7,7 @@ Las pruebas de interfaz, la integración con Supabase y la comprobación del ser
 | Ubicación | Qué comprueba | Servicios externos y escrituras |
 | --- | --- | --- |
 | `unit/*.test.mjs` | Atribución del poema, párrafos y traducciones de obras, texto escapado, medidas físicas y geometría de ambientes; contrato del workflow exclusivo del edge, sin publicaciones Pages; también se conservan las pruebas del código heredado de correo con Deno y proveedor simulados. | Sin acceso remoto ni envíos de correo. La función Resend ya no pertenece al flujo activo. |
-| `e2e/*.spec.ts` | React real en Chromium de escritorio y móvil táctil emulado: navegación, idiomas, portada, footer, colecciones, visor, filtros, contactos `mailto:` y formularios de edición. Incluye errores, reintentos, cancelaciones, archivos huérfanos y contenido oculto. | Supabase, Storage y Auth **simulados** mediante `helpers/mock-supabase.ts`; las solicitudes externas se interceptan. No modifica producción ni envía correos. |
+| `e2e/*.spec.ts` | React real en Chromium de escritorio y móvil táctil emulado: navegación, idiomas, portada, footer, colecciones, visor, filtros, contactos `mailto:` y formularios de edición. El proyecto `mobile-webkit` añade las regresiones de altura del footer y elegibilidad de ambientes en WebKit. Incluye errores, reintentos, cancelaciones, archivos huérfanos y contenido oculto. | Supabase, Storage y Auth **simulados** mediante `helpers/mock-supabase.ts`; las solicitudes externas se interceptan. No modifica producción ni envía correos. |
 | `integration/*.test.mjs` | Pruebas locales de las guardas del ejecutor Supabase y del comprobador público: configuración, privilegios, HTTP, imágenes, CORS y honeypot. | Solicitudes simuladas o bloqueadas. No modifica servicios reales. |
 | `integration/supabase-editing.mjs` | Auth, `is_admin`, RLS, CRUD editorial, traducciones, saltos de línea, visibilidad, ajustes aislados, Storage y borrado en cascada. | **Integración real** contra el destino elegido. Crea y elimina datos temporales; requiere consentimiento explícito. |
 | `integration/catalog-live-rollback.sql` | Comprobación manual posterior a la migración: permisos, disponibilidad, edición, movimientos, conflictos, ocultación y borrados del catálogo. | **SQL real** mediante conexión de confianza, fuera de CI. Simula permisos dentro de una transacción y termina en `ROLLBACK`; no toca Storage ni crea usuarios. |
@@ -16,7 +16,7 @@ Las pruebas de interfaz, la integración con Supabase y la comprobación del ser
 
 ## Comprobación habitual, sin tocar producción
 
-Desde la raíz del repositorio, instalar las dependencias con `npm ci`. La primera ejecución de Playwright puede requerir instalar Chromium con `npx playwright install chromium`.
+Desde la raíz del repositorio, instalar las dependencias con `npm ci`. La primera ejecución de Playwright puede requerir instalar los navegadores con `npx playwright install chromium webkit`. En Linux, `npx playwright install --with-deps chromium webkit` también instala sus dependencias del sistema y puede solicitar permisos administrativos; GitHub usa este último comando.
 
 ```bash
 npm test
@@ -35,6 +35,14 @@ npm run test:e2e
 npm run test:components
 node --test tests/integration/*.test.mjs
 ```
+
+### Footer móvil y disponibilidad de ambientes
+
+`e2e/footer-viewport.spec.ts` verifica páginas cortas y largas, carga pendiente, errores, edición y cambios de altura/orientación. El footer permanece después del contenido y ocupa el final del documento sin la antigua altura artificial `100vh - 190px`. El contenedor público usa altura dinámica con respaldo `100vh`, conserva el gradiente y pinta de blanco el fondo exterior para acompañar el footer; se reserva la zona segura inferior cuando el navegador la expone.
+
+`e2e/room-eligibility.spec.ts` comprueba que solo se ofrece el botón de ambiente cuando hay medidas físicas válidas y un escenario compatible. La proporción de la imagen no sustituye sus medidas reales. Las pruebas de geometría y componentes mantienen por separado la cobertura del tamaño y encaje de las obras con medidas conocidas.
+
+Ambos archivos se ejecutan en Chromium y WebKit antes de publicar. Para una comprobación focal: `npx playwright test footer-viewport room-eligibility --project=mobile-webkit`.
 
 ## Integración real con Supabase local
 
@@ -129,4 +137,4 @@ Esta opción no se ejecuta en el despliegue ni representa el contacto activo. Ex
 
 ## Límites de la validación
 
-La emulación móvil no sustituye una revisión en dispositivos físicos ni cubre Safari/Firefox. Las comprobaciones HTTP de imágenes no decodifican el archivo completo ni evalúan su calidad visual. Las pruebas de permisos cubren los flujos de la aplicación, pero no reemplazan una auditoría integral de seguridad ni pruebas de carga. No presentar una suite simulada o una comprobación de sólo lectura como validación de escritura o entrega de correo en producción.
+La emulación móvil no sustituye una revisión en dispositivos físicos. WebKit cubre las regresiones indicadas, pero no equivale a Safari en un iPhone real ni reproduce su barra de herramientas, teclado o rebote elástico; Firefox no está incluido. Las comprobaciones HTTP de imágenes no decodifican el archivo completo ni evalúan su calidad visual. Las pruebas de permisos cubren los flujos de la aplicación, pero no reemplazan una auditoría integral de seguridad ni pruebas de carga. No presentar una suite simulada o una comprobación de sólo lectura como validación de escritura o entrega de correo en producción.

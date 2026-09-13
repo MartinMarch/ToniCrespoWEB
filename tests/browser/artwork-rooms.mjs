@@ -169,11 +169,17 @@ async function installIsolation(page) {
 
 async function openFixture(page, fixture) {
   await page.evaluate(`window.__roomsTest.render(${JSON.stringify(fixture)})`);
-  await page.waitFor(`document.querySelector('.artwork-ambient-button') && document.querySelector('.artwork-showcase')?.textContent.includes(${JSON.stringify(fixture.title ?? fixture.id)})`, `fixture ${fixture.id}`);
+  await page.waitFor(`document.querySelector('.artwork-showcase')?.textContent.includes(${JSON.stringify(fixture.title ?? fixture.id)})`, `fixture ${fixture.id}`);
+  const eligible = await page.evaluate("window.__roomsTest.geometry.getMockupsForArtwork(window.__roomsTest.artwork, window.__roomsTest.scenes).length > 0");
+  if (!eligible) {
+    await page.waitFor("!document.querySelector('.artwork-ambient-button') && !document.querySelector('.artwork-mockup-lightbox')", "ineligible artwork has no room action or viewer");
+    return false;
+  }
   await page.evaluate("document.querySelector('.artwork-ambient-button').scrollIntoView({ block: 'center', behavior: 'instant' })");
   await page.click(".artwork-ambient-button");
   await page.waitFor("Boolean(document.querySelector('.artwork-mockup-lightbox'))", "room dialog opens");
   await pause(150);
+  return true;
 }
 
 async function inspectScene(page, fixture, viewport) {
@@ -200,6 +206,9 @@ async function inspectScene(page, fixture, viewport) {
       image: rect(card?.querySelector('.room-mockup-card__artwork-surface img')),
       imageFit: card?.querySelector('.room-mockup-card__artwork-surface img') ? getComputedStyle(card.querySelector('.room-mockup-card__artwork-surface img')).objectFit : null,
       dialogText: document.querySelector('.artwork-mockup-lightbox')?.textContent?.trim(),
+      roomAction: Boolean(document.querySelector('.artwork-ambient-button')),
+      zoomAction: Boolean(document.querySelector('.artwork-showcase__zoom-button')),
+      contactAction: Boolean(document.querySelector('.artwork-interest-button')),
       border: style ? [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth] : [],
       padding: style ? [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft] : [],
       frames: [...(card?.querySelectorAll('.room-mockup-card__frame') ?? [])].map(e => { const s = getComputedStyle(e); return { padding: s.padding, border: s.borderWidth, background: s.backgroundColor }; }),
@@ -216,8 +225,9 @@ function verifyScene(state, fixture, viewport) {
   assert.equal(state.count, state.expectedCount, `${prefix}: filtered scene count`);
   assert(!state.horizontalOverflow, `${prefix}: page horizontal overflow`);
   if (!state.expectedCount) {
-    assert.equal(fixture.id, "oversize", `${prefix}: ordinary fixture should have a suitable room`);
-    assert(state.dialogText.length > fixture.id.length + 20, `${prefix}: no-room state needs an explanation`);
+    assert(["oversize", "unknown"].includes(fixture.id), `${prefix}: ordinary fixture should have a suitable room`);
+    assert(!state.roomAction && !state.dialogText, `${prefix}: ineligible artwork must not offer or open room previews`);
+    assert(state.zoomAction && state.contactAction, `${prefix}: normal zoom and contact remain available`);
     report.checks.push({ ...state, status: "pass" });
     return;
   }
@@ -225,8 +235,8 @@ function verifyScene(state, fixture, viewport) {
   assert.equal(state.renderedScene, state.scene, `${prefix}: rendered catalog order`);
   assert(state.caption, `${prefix}: scale explanation is missing`);
   assert(state.captionRect.y >= -1 && state.captionRect.bottom <= viewport.height + 1, `${prefix}: scale caption clipped vertically`);
-  assert.equal(state.expected.isEstimated, fixture.id === "unknown", `${prefix}: missing measurements must be explicitly estimated`);
-  assert(state.caption.includes(fixture.id === "unknown" ? "sin escala" : "orientativa"), `${prefix}: honest known/unknown scale caption`);
+  assert.equal(state.expected.isEstimated, false, `${prefix}: only physically measured artworks are offered`);
+  assert(state.caption.includes("orientativa"), `${prefix}: honest scale caption`);
   assert(state.expected.fits, `${prefix}: must not show an oversized placement`);
   assert(state.card.width > 60 && state.card.height > 40, `${prefix}: room collapsed`);
   const close = (actual, expected, label, tolerance = 0.55) => assert(Math.abs(actual - expected) <= tolerance, `${prefix}: ${label}: ${actual} != ${expected}`);
@@ -352,8 +362,8 @@ async function main() {
       await page.send("Emulation.setDeviceMetricsOverride", { width: viewport.width, height: viewport.height, screenWidth: viewport.width, screenHeight: viewport.height, deviceScaleFactor: 1, mobile: viewport.mobile });
       await page.send("Emulation.setTouchEmulationEnabled", { enabled: viewport.mobile, maxTouchPoints: 1 });
       for (const fixture of fixtures) {
-        await openFixture(page, fixture);
-        if (fixture.id !== "oversize") await page.waitFor("[...document.querySelectorAll('.room-mockup-card.is-active img')].length >= 2 && [...document.querySelectorAll('.room-mockup-card.is-active img')].every(i => i.complete && i.naturalWidth > 0)", "local room images");
+        const eligible = await openFixture(page, fixture);
+        if (eligible) await page.waitFor("[...document.querySelectorAll('.room-mockup-card.is-active img')].length >= 2 && [...document.querySelectorAll('.room-mockup-card.is-active img')].every(i => i.complete && i.naturalWidth > 0)", "local room images");
         let state = await inspectScene(page, fixture, viewport);
         verifyScene(state, fixture, viewport);
         if (["smallest-square", "small-square", "large-square", "panorama", "portrait", "long-title"].includes(fixture.id)) await page.capture(`${viewport.name}-${fixture.id}`, outputDirectory);

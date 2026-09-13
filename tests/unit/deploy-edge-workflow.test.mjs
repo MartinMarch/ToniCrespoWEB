@@ -51,6 +51,17 @@ test("edge artifacts preserve the root-domain build and consumer manifest contra
   assert.doesNotMatch(publish, /--clobber|SUPABASE_SERVICE_ROLE_KEY|sb_secret_/);
 });
 
+test("the release gate installs WebKit and runs the focused iPhone-layout regressions", () => {
+  const browserConfig = readFileSync(new URL("playwright.config.ts", root), "utf8");
+  assert.match(qualityWorkflow, /playwright install --with-deps chromium webkit/);
+  assert.match(browserConfig, /name: "mobile-webkit"/);
+  assert.match(browserConfig, /browserName: "webkit"/);
+  for (const spec of ["footer-viewport.spec.ts", "room-eligibility.spec.ts"]) {
+    assert.ok(browserConfig.includes(`"**/${spec}"`));
+  }
+  assert.equal(packageJson.scripts["test:e2e"], "playwright test");
+});
+
 test("the obsolete Pages preview is removed while normal Vite preview remains available", () => {
   assert.equal(packageJson.scripts["preview:pages"], undefined);
   assert.match(packageJson.scripts.preview, /^vite preview\b/);

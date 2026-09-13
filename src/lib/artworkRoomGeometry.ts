@@ -73,21 +73,14 @@ export function getArtworkMetrics(artwork: ArtworkGeometrySource): ArtworkMetric
 export function getArtworkPlacement(metrics: ArtworkMetrics, scene: RoomScene): ArtworkPlacement {
   const aspectRatio = positive(scene.imageAspectRatio) ? scene.imageAspectRatio : 1.5;
   const isEstimated = metrics.widthCm === null || metrics.heightCm === null;
-  let width: number;
-  let height: number;
-
-  if (!isEstimated) {
-    const scale = scene.reference.imageWidthPercent / scene.reference.widthCm;
-    width = metrics.widthCm! * scale;
-    height = metrics.heightCm! * scale * aspectRatio;
-  } else {
-    // A composition preview, not an invented real-world measurement.
-    const availableWidth = 2 * Math.max(0, Math.min(scene.artworkCenter.x - scene.wall.left, scene.wall.right - scene.artworkCenter.x));
-    const availableHeight = 2 * Math.max(0, Math.min(scene.artworkCenter.y - scene.wall.top, scene.wall.bottom - scene.artworkCenter.y));
-    const ratio = positive(metrics.ratio) ? metrics.ratio : 1;
-    width = Math.min(availableWidth * 0.65, availableHeight * 0.65 * ratio / aspectRatio);
-    height = width / ratio * aspectRatio;
+  if (isEstimated) {
+    // Image proportions are useful for the normal viewer, but do not establish
+    // physical dimensions or make an artwork eligible for a room preview.
+    return { x: scene.artworkCenter.x, y: scene.artworkCenter.y, width: 0, height: 0, fits: false, isEstimated: true };
   }
+  const scale = scene.reference.imageWidthPercent / scene.reference.widthCm;
+  const width = metrics.widthCm! * scale;
+  const height = metrics.heightCm! * scale * aspectRatio;
 
   const x = scene.artworkCenter.x;
   const y = scene.artworkCenter.y - height / 2;
@@ -101,15 +94,11 @@ export function getArtworkPlacement(metrics: ArtworkMetrics, scene: RoomScene): 
   return { x, y, width, height, isEstimated, fits };
 }
 
-/** Select fitting rooms; never make an oversized work smaller to offer a room. */
+/** Require physical measurements and a fitting wall; never invent or shrink sizes. */
 export function getMockupsForArtwork<T extends RoomScene>(artwork: ArtworkGeometrySource, scenes: readonly T[]): T[] {
   const metrics = getArtworkMetrics(artwork);
+  if (metrics.longestCm === null || metrics.widthCm === null || metrics.heightCm === null) return [];
   const fittingScenes = scenes.filter((scene) => getArtworkPlacement(metrics, scene).fits);
-
-  if (metrics.longestCm === null) {
-    const previews = fittingScenes.filter((scene) => scene.sizeRange.min <= 100 && scene.sizeRange.max >= 100);
-    return (previews.length > 0 ? previews : fittingScenes).slice(0, 3);
-  }
 
   const longestCm = metrics.longestCm;
   const sizeMatched = fittingScenes.filter((scene) => longestCm >= scene.sizeRange.min && longestCm <= scene.sizeRange.max);

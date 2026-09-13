@@ -38,23 +38,30 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
   const mockupTitleId = useId();
   const mockupDescriptionId = useId();
   const mockupDialogRef = useRef<HTMLDivElement | null>(null);
+  const showcaseListRef = useRef<HTMLDivElement | null>(null);
   const [activeArtwork, setActiveArtwork] = useState<CurrentArtwork | null>(null);
-  const [activeMockupArtwork, setActiveMockupArtwork] = useState<CurrentArtwork | null>(null);
+  const [activeMockupArtworkId, setActiveMockupArtworkId] = useState<string | null>(null);
   const [activeMockupIndex, setActiveMockupIndex] = useState(0);
   const [lensPosition, setLensPosition] = useState({ x: 50, y: 50 });
   const [isLensVisible, setIsLensVisible] = useState(false);
   const mockupGalleryRef = useRef<HTMLDivElement | null>(null);
   const mockupScrollUnlockRef = useRef<number | null>(null);
+  const activeMockupArtwork = artworks.find((artwork) => artwork.id === activeMockupArtworkId) ?? null;
   const activeMockups = useMemo(
     () => (activeMockupArtwork ? getMockupsForArtwork(activeMockupArtwork, roomScenes) : []),
     [activeMockupArtwork],
   );
   const hasMockupNavigation = activeMockups.length > 1;
-  const hasKnownMockupDimensions = activeMockupArtwork !== null && getArtworkMetrics(activeMockupArtwork).widthCm !== null;
+  const isMockupOpen = activeMockupArtwork !== null && activeMockups.length > 0;
 
   useEffect(() => {
-    if (!activeMockupArtwork) return;
+    if (activeMockupArtworkId !== null && !isMockupOpen) setActiveMockupArtworkId(null);
+  }, [activeMockupArtworkId, isMockupOpen]);
+
+  useEffect(() => {
+    if (!isMockupOpen) return;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousArtworkZoom = previousFocus?.closest(".artwork-showcase")?.querySelector<HTMLButtonElement>(".artwork-showcase__zoom-button");
     const dialog = mockupDialogRef.current;
     dialog?.querySelector<HTMLButtonElement>(".artwork-lightbox__close")?.focus();
     function trapFocus(event: KeyboardEvent) {
@@ -73,17 +80,22 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
     dialog?.addEventListener("keydown", trapFocus);
     return () => {
       dialog?.removeEventListener("keydown", trapFocus);
-      previousFocus?.focus({ preventScroll: true });
+      // Removing the dimensions also removes the triggering button. Preserve
+      // keyboard position on the work's zoom, or another remaining list control.
+      const returnTarget = previousFocus?.isConnected ? previousFocus
+        : previousArtworkZoom?.isConnected ? previousArtworkZoom
+          : showcaseListRef.current?.querySelector<HTMLElement>("button:not(:disabled)") ?? showcaseListRef.current;
+      returnTarget?.focus({ preventScroll: true });
     };
-  }, [activeMockupArtwork]);
+  }, [activeMockupArtworkId, isMockupOpen]);
 
   useEffect(() => {
-    if (!activeArtwork && !activeMockupArtwork) return;
+    if (!activeArtwork && !isMockupOpen) return;
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setActiveArtwork(null);
-        setActiveMockupArtwork(null);
+        setActiveMockupArtworkId(null);
       }
     }
 
@@ -94,21 +106,31 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
       document.documentElement.classList.remove("is-lightbox-open");
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [activeArtwork, activeMockupArtwork]);
+  }, [activeArtwork, isMockupOpen]);
 
   useEffect(() => {
-    if (!activeMockupArtwork) return;
-
     if (mockupScrollUnlockRef.current !== null) {
       window.clearTimeout(mockupScrollUnlockRef.current);
       mockupScrollUnlockRef.current = null;
     }
+    if (!isMockupOpen) return;
 
     setActiveMockupIndex(0);
     requestAnimationFrame(() => {
       mockupGalleryRef.current?.scrollTo({ left: 0, behavior: "auto" });
     });
-  }, [activeMockupArtwork?.id]);
+  }, [activeMockupArtworkId, activeMockups, isMockupOpen]);
+
+  useEffect(() => {
+    if (!isMockupOpen) return;
+    const dialog = mockupDialogRef.current;
+    const focused = document.activeElement;
+    // New scene IDs replace pagination controls, and resetting the index can
+    // disable navigation. Keep the existing focus whenever it is still usable.
+    if (dialog && (!dialog.contains(focused) || (focused instanceof HTMLButtonElement && focused.disabled))) {
+      dialog.querySelector<HTMLButtonElement>(".artwork-lightbox__close")?.focus({ preventScroll: true });
+    }
+  }, [activeMockups, activeMockupIndex, isMockupOpen]);
 
   useEffect(
     () => () => {
@@ -126,8 +148,10 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
   }
 
   function openMockups(artwork: CurrentArtwork) {
+    const currentArtwork = artworks.find((candidate) => candidate.id === artwork.id);
+    if (!currentArtwork || getMockupsForArtwork(currentArtwork, roomScenes).length === 0) return;
     setActiveMockupIndex(0);
-    setActiveMockupArtwork(artwork);
+    setActiveMockupArtworkId(currentArtwork.id);
   }
 
   function scrollMockupIntoView(index: number) {
@@ -186,7 +210,7 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
 
   return (
     <>
-      <div className="artwork-showcase-list">
+      <div ref={showcaseListRef} className="artwork-showcase-list" tabIndex={-1}>
         {isEditing && onAdd ? (
           <button
             type="button"
@@ -242,9 +266,9 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
         </div>
       ) : null}
 
-      {activeMockupArtwork ? (
-        <div ref={mockupDialogRef} className="artwork-mockup-lightbox" role="dialog" aria-modal="true" aria-labelledby={mockupTitleId} aria-describedby={mockupDescriptionId} onClick={() => setActiveMockupArtwork(null)}>
-          <LightboxCloseButton label={labels.actions.closeMockups} onClick={() => setActiveMockupArtwork(null)} />
+      {isMockupOpen && activeMockupArtwork ? (
+        <div ref={mockupDialogRef} className="artwork-mockup-lightbox" role="dialog" aria-modal="true" aria-labelledby={mockupTitleId} aria-describedby={mockupDescriptionId} onClick={() => setActiveMockupArtworkId(null)}>
+          <LightboxCloseButton label={labels.actions.closeMockups} onClick={() => setActiveMockupArtworkId(null)} />
           <div className="artwork-mockup-lightbox__inner" onClick={(event) => event.stopPropagation()}>
             <div className="artwork-mockup-lightbox__heading">
               <span>{labels.actions.mockups}</span>
@@ -270,7 +294,6 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
                 aria-label={`${labels.actions.mockupsFor} ${activeMockupArtwork.title}`}
                 tabIndex={0}
               >
-                {activeMockups.length === 0 ? <p className="artwork-mockup-empty">{labels.actions.noFittingRoom}</p> : null}
                 {activeMockups.map((mockup, index) => (
                   <RoomMockup
                     key={mockup.id}
@@ -307,7 +330,7 @@ export function ArtworkShowcaseList({ artworks, isEditing = false, onAdd, onDele
                 </div>
               ) : null}
               <p id={mockupDescriptionId} className="artwork-mockup-lightbox__scale">
-                {hasKnownMockupDimensions ? labels.actions.roomScaleNote : labels.actions.roomScaleUnknown}
+                {labels.actions.roomScaleNote}
               </p>
             </div>
           </div>
@@ -375,6 +398,7 @@ function ArtworkShowcase({
   onMockupsSelect: (artwork: CurrentArtwork) => void;
 }) {
   const { openArtworkContact } = useContactDialog();
+  const hasMockups = useMemo(() => getMockupsForArtwork(artwork, roomScenes).length > 0, [artwork]);
 
   return (
     <article className={`artwork-showcase${!artwork.isPublished ? " is-unpublished" : ""}`} id={artwork.slug}>
@@ -429,7 +453,7 @@ function ArtworkShowcase({
         {artwork.dimensions ? <ArtworkDimensions value={artwork.dimensions} /> : null}
         <ArtworkEditorialText artwork={artwork} />
         <div className="artwork-showcase__actions">
-          <button
+          {hasMockups ? <button
             type="button"
             className="artwork-ambient-button"
             onClick={() => onMockupsSelect(artwork)}
@@ -441,7 +465,7 @@ function ArtworkShowcase({
               <path d="m6.8 14.2 2.5-2.8 2 2.1 1.4-1.5 1.8 2.2" />
             </svg>
             <span>{labels.actions.mockups}</span>
-          </button>
+          </button> : null}
           <button type="button" className="artwork-interest-button" onClick={() => openArtworkContact(artwork)}>
             {artwork.isAvailable === false ? labels.actions.inquire : labels.actions.interest}
           </button>

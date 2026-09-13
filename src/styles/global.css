@@ -66,9 +66,17 @@ body {
   color: var(--ink);
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   min-width: 320px;
   overflow-x: hidden;
   scrollbar-width: none;
+}
+
+/* Match the white footer in the canvas revealed by mobile elastic scrolling.
+   The public page's configured gradient stays on .app-shell. */
+html:has(.app-shell),
+body:has(.app-shell) {
+  background: #ffffff;
 }
 
 html::-webkit-scrollbar,
@@ -125,12 +133,27 @@ p {
 
 main {
   background: transparent;
-  min-height: calc(100vh - 190px);
+  min-height: 0;
 }
 
 .app-shell {
   background: var(--page-bg);
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Let the real header/footer heights determine the remaining space, including
+   when Safari's browser bars expand, collapse or the phone changes orientation. */
+.app-shell > main {
+  flex: 1 0 auto;
+  min-width: 0;
+}
+
+.app-shell > .site-header,
+.app-shell > .site-footer {
+  flex-shrink: 0;
 }
 
 .site-header {
@@ -2526,6 +2549,7 @@ main {
   display: grid;
   margin: 0;
   padding: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   width: 100%;
 }
 

@@ -105,15 +105,28 @@ test("selects fitting size-matched rooms and only uses physically fitting larger
   assert.deepEqual(getMockupsForArtwork(artwork("800 × 600 cm"), rooms), []);
 });
 
-test("unknown sizes remain explicitly estimated and preserve image shape", () => {
+test("unknown sizes preserve image shape only for ordinary viewing, never room eligibility", () => {
   const metrics = getArtworkMetrics(artwork(null, { width: 400, height: 1000 }));
   assert.deepEqual(metrics, { ratio: 0.4, widthCm: null, heightCm: null, longestCm: null });
   const placement = getArtworkPlacement(metrics, scene());
-  assert.equal(placement.fits, true);
+  assert.equal(placement.fits, false);
   assert.equal(placement.isEstimated, true);
-  close(placement.width / placement.height * 1.5, 0.4);
+  assert.equal(placement.width, 0);
+  assert.equal(placement.height, 0);
+  assert.deepEqual(getMockupsForArtwork(artwork(null, { width: 400, height: 1000 }), [scene()]), []);
   const invalidImage = getArtworkMetrics(artwork(null, { width: -1, height: 0 }));
   assert.equal(invalidImage.ratio, 1);
+});
+
+test("room selection requires valid physical dimensions, not pixel metadata or a numeric guess", () => {
+  const rooms = [scene()];
+  for (const dimensions of [null, "", " ", "80 x 60", "0 x 60 cm", "-80 x 60 cm", "80 x 60 x 4 cm", "dos metros"]) {
+    assert.deepEqual(getMockupsForArtwork(artwork(dimensions, { width: 8000, height: 6000 }), rooms), [], String(dimensions));
+  }
+  assert.deepEqual(getMockupsForArtwork(artwork("80 x 60", { caption: "80 x 60 cm" }), rooms), []);
+  assert.equal(getMockupsForArtwork(artwork(null, { caption: "Óleo sobre lienzo. 80 x 60 cm" }), rooms).length, 1);
+  assert.equal(getMockupsForArtwork(artwork(null, { description: "Medidas: 0,8 × 0,6 m" }), rooms).length, 1);
+  assert.deepEqual(getMockupsForArtwork(artwork("80 x 60 cm"), []), []);
 });
 
 test("preferred size ceilings never hide a physically fitting panoramic artwork", () => {

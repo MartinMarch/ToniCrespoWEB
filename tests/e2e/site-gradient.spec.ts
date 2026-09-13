@@ -43,7 +43,10 @@ async function expectAppliedGradient(page: Page, gradient: Gradient) {
     return { startColor: style.getPropertyValue('--gradient-start').trim(), endColor: style.getPropertyValue('--gradient-end').trim() };
   })).toEqual(gradient);
   await expectGradientImage(page.locator('.app-shell'), gradient);
-  await expect(page.locator('body')).toHaveCSS('background-color', rgb(gradient.startColor));
+  // The configured gradient belongs to the app shell; the elastic-scroll canvas
+  // matches the white footer instead of revealing the gradient's initial color.
+  await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(page.locator('.site-footer')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(page.locator('.site-footer')).toHaveCSS('background-image', 'none');
   await expect(page.locator('.site-footer__bottom')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');

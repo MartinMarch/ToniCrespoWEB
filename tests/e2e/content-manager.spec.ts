@@ -309,6 +309,8 @@ test('editing can repair a missing image without deleting shared files and later
   expect(backend.state.deletedAssets).toEqual([]);
   await page.getByRole('button', { name: 'Volver a la web', exact: true }).click();
   await page.getByRole('button', { name: 'Cerrar sesión', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Edición web', exact: true })).toBeVisible();
   await page.goto('/lienzos/horizontes');
   await expect(page.locator('#mar-sereno img').first()).toHaveAttribute('src', saved.image_url);
 });
@@ -467,6 +469,8 @@ test('recent collections remain first in each public branch, can be hidden witho
   expect(backend.state.tables.artworks).toHaveLength(4);
   await page.getByRole('button', { name: 'Volver a la web', exact: true }).click();
   await page.getByRole('button', { name: 'Cerrar sesión', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Edición web', exact: true })).toBeVisible();
   await page.goto('/lienzos');
   await expect(page.locator('.support-collection-preview-card__title').filter({ hasText: /^Obras recientes$/ })).toHaveCount(0);
   await page.goto('/laminas');
@@ -602,6 +606,8 @@ test('availability saved in the manager survives reload and logout, stays public
   await expect(page.locator('[data-artwork-id="artwork-square"] .content-manager-badges')).toHaveText('No disponible');
   await page.getByRole('button', { name: 'Volver a la web', exact: true }).click();
   await page.getByRole('button', { name: 'Cerrar sesión', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Edición web', exact: true })).toBeVisible();
   await page.goto('/lienzos/horizontes');
   const publicArtwork = page.locator('#mar-sereno');
   await expect(publicArtwork.locator('.artwork-availability')).toHaveText('No disponible');
@@ -619,6 +625,8 @@ test('availability saved in the manager survives reload and logout, stays public
   await expect(restore).toBeHidden();
   await page.getByRole('button', { name: 'Volver a la web', exact: true }).click();
   await page.getByRole('button', { name: 'Cerrar sesión', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Edición web', exact: true })).toBeVisible();
   await page.goto('/lienzos/horizontes');
   await expect(publicArtwork.getByRole('heading', { name: 'Mar sereno', exact: true })).toBeVisible();
   await expect(publicArtwork.locator('.artwork-availability')).toHaveCount(0);

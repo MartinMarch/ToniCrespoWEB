@@ -22,7 +22,7 @@ Usa Node 24 (la misma versión que GitHub Actions) y `npm ci` para reproducir la
 Validacion:
 
 ```bash
-npx playwright install chromium
+npx playwright install chromium webkit
 npm run test:ci
 ```
 

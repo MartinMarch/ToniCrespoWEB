@@ -12,7 +12,7 @@ async function importTypeScript(path) {
   return import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
 }
 const { getArtworkEditorialText } = await importTypeScript("../../src/lib/artworkEditorialText.ts");
-const { getArtworkMetrics } = await importTypeScript("../../src/lib/artworkRoomGeometry.ts");
+const { getArtworkMetrics, getMockupsForArtwork } = await importTypeScript("../../src/lib/artworkRoomGeometry.ts");
 const { translateEditorialContent } = await importTypeScript("../../src/data/editorialTranslations.ts");
 const showcaseSource = await readFile(new URL("../../src/components/artworks/ArtworkShowcaseList.tsx", import.meta.url), "utf8");
 const showcaseCode = ts.transpileModule(showcaseSource.replace(/^import[\s\S]*?;\s*$/gm, ""), {
@@ -31,7 +31,7 @@ const description = "Una descripción nueva de la obra.\n\nObra no disponible";
 function renderArtwork(artwork, fullscreen = false) {
   let stateCalls = 0;
   const environment = {
-    React, exports: {}, getArtworkEditorialText, getArtworkMetrics, roomScenes: [],
+    React, exports: {}, getArtworkEditorialText, getArtworkMetrics, getMockupsForArtwork, roomScenes: [],
     useEffect: () => {}, useRef: initial => ({ current: initial }), useId: () => "fixture-dialog",
     useMemo: factory => factory(),
     useState: initial => [fullscreen && stateCalls++ === 0 ? artwork : typeof initial === "function" ? initial() : initial, () => {}],

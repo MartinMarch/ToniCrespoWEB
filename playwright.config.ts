@@ -19,11 +19,15 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "off",
     serviceWorkers: "block",
-    launchOptions: executablePath ? { executablePath } : {},
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 1000 } } },
-    { name: "mobile", use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } } },
+    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 1000 }, launchOptions: executablePath ? { executablePath } : {} } },
+    { name: "mobile", use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 }, launchOptions: executablePath ? { executablePath } : {} } },
+    {
+      name: "mobile-webkit",
+      testMatch: ["**/footer-viewport.spec.ts", "**/room-eligibility.spec.ts"],
+      use: { ...devices["iPhone 13"], browserName: "webkit" },
+    },
   ],
   webServer: {
     command: `npm run dev -- --host 127.0.0.1 --port ${port} --strictPort`,

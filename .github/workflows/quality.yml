@@ -24,7 +24,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx --no-install playwright install --with-deps chromium
+      - run: npx --no-install playwright install --with-deps chromium webkit
       - name: Install isolated PostgreSQL test tools
         run: |
           sudo apt-get update

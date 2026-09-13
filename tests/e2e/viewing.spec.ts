@@ -585,20 +585,20 @@ test('AI rooms keep calibrated physical scale, contain the whole frameless work 
   }
 });
 
-test('unknown room dimensions are explicitly unscaled and oversized works are never shrunk to fit', async ({ page, backend }) => {
+test('unknown and oversized works do not offer room previews but retain their normal viewer', async ({ page, backend }) => {
   await spanish(page);
   const square = backend.state.tables.artworks.find((row) => row.id === 'artwork-square')!;
   square.dimensions = null;
   const wide = backend.state.tables.artworks.find((row) => row.id === 'artwork-wide')!;
   wide.dimensions = '1000 × 1000 cm';
   await page.goto('/lienzos/horizontes');
-  await page.locator('#mar-sereno .artwork-ambient-button').click();
-  await expect(page.locator('.artwork-mockup-lightbox__scale')).toContainText('Vista sin escala');
-  await page.keyboard.press('Escape');
-  await page.locator('#horizonte-abierto .artwork-ambient-button').click();
-  await expect(page.locator('.artwork-mockup-empty')).toContainText('No la reducimos para que encaje');
+  await expect(page.locator('#mar-sereno .artwork-ambient-button')).toHaveCount(0);
+  await expect(page.locator('#horizonte-abierto .artwork-ambient-button')).toHaveCount(0);
   await expect(page.locator('.room-mockup-card')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Cerrar ambientes', exact: true }).click();
+  await page.locator('#mar-sereno .artwork-showcase__zoom-button').click();
+  await loadedImage(page.locator('.artwork-lightbox__stage img'));
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.artwork-lightbox')).toHaveCount(0);
   await expect(page.locator('.artwork-mockup-lightbox')).toHaveCount(0);
 });
 
