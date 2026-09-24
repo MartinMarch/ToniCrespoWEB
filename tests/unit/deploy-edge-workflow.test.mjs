@@ -51,12 +51,12 @@ test("edge artifacts preserve the root-domain build and consumer manifest contra
   assert.doesNotMatch(publish, /--clobber|SUPABASE_SERVICE_ROLE_KEY|sb_secret_/);
 });
 
-test("the release gate installs WebKit and runs the focused iPhone-layout regressions", () => {
+test("the release gate installs WebKit and runs the focused iPhone layout and language regressions", () => {
   const browserConfig = readFileSync(new URL("playwright.config.ts", root), "utf8");
   assert.match(qualityWorkflow, /playwright install --with-deps chromium webkit/);
   assert.match(browserConfig, /name: "mobile-webkit"/);
   assert.match(browserConfig, /browserName: "webkit"/);
-  for (const spec of ["footer-viewport.spec.ts", "room-eligibility.spec.ts"]) {
+  for (const spec of ["footer-viewport.spec.ts", "room-eligibility.spec.ts", "language-selector.spec.ts", "language-preferences.spec.ts"]) {
     assert.ok(browserConfig.includes(`"**/${spec}"`));
   }
   assert.equal(packageJson.scripts["test:e2e"], "playwright test");

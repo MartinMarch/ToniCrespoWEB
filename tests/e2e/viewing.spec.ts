@@ -256,7 +256,7 @@ test('larger desktop portfolio squares and both titles fit the initial viewport 
         await expect(cards.nth(1)).toHaveAttribute('href', '/laminas');
         await expect(cards.nth(0).locator('.support-landing-card__title')).toHaveText('Lienzos');
         await expect(cards.nth(1).locator('.support-landing-card__title')).toHaveText('Obra en papel');
-        await expect(page.locator('.home-statement-section')).toHaveCount(path === '/' ? 1 : 0);
+        await expect(page.locator('.home-statement-section')).toHaveCount(1);
         await noOverflow(page);
         if (phase === 'fresh' && [900, 600].includes(viewport.height)) {
           await page.screenshot({ path: testInfo.outputPath(`${path === '/' ? 'home' : 'work'}-squares-${viewport.width}x${viewport.height}.png`) });
@@ -277,7 +277,7 @@ test('home and work share exactly the same cover content and layout across mobil
     await page.goto('/obra');
     await expect(page.locator('.support-landing-card')).toHaveCount(2);
     for (const card of await page.locator('.support-landing-card').all()) await loadedImage(card.locator('img'));
-    await expect(page.locator('.home-statement-section')).toHaveCount(0);
+    await expect(page.locator('.home-statement-section')).toHaveCount(1);
     const work = await measureLanding(page);
     await page.goto('/');
     await expect(page.locator('.support-landing-card')).toHaveCount(2);
@@ -412,28 +412,80 @@ test('a single compact white footer preserves centered branding and translated b
   expect(backend.requests.filter((request) => !['GET', 'HEAD'].includes(request.method))).toEqual([]);
 });
 
-test('the home quotation is larger on phones and desktop while preserving its font, italics and separate attribution', async ({ page }) => {
+test('home and work quotation keep the phone size and use a proportionate desktop size with the same italic typography', async ({ page }, testInfo) => {
   await spanish(page);
-  await page.goto('/');
-  const quote = page.locator('.home-statement-section h4').first();
-  const attribution = page.locator('.home-statement-section h4').last();
-  for (const width of [320, 390, 700, 701, 820, 821, 1024, 1280, 1440, 1920]) {
-    await page.setViewportSize({ width, height: 1000 });
-    const expectedSize = Math.min(30, Math.max(22, width * .021));
-    await expect(quote).toHaveCSS('font-size', `${Number(expectedSize.toFixed(4))}px`);
-    await expect(quote).toHaveCSS('font-style', /italic|oblique/);
-    await expect(quote).toHaveCSS('text-align', 'justify');
-    await expect(attribution).toHaveCSS('text-align', 'right');
-    const fonts = await page.locator('.home-statement-section h4').evaluateAll((elements) => elements.map((element) => ({
-      family: getComputedStyle(element).fontFamily, size: Number.parseFloat(getComputedStyle(element).fontSize),
-    })));
-    expect(fonts[0].family).toContain('Manrope');
-    expect(fonts[1].family).toBe(fonts[0].family);
-    expect(fonts[1].size).toBeGreaterThanOrEqual(15);
-    expect(fonts[1].size).toBeLessThanOrEqual(18);
-    expect(fonts[1].size).toBeLessThan(fonts[0].size);
-    await noOverflow(page);
+  for (const path of ['/', '/obra']) {
+    await page.goto(path);
+    const quote = page.locator('.home-statement-section h4').first();
+    const attribution = page.locator('.home-statement-section h4').last();
+    for (const width of [320, 390, 700, 701, 820, 821, 1024, 1280, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const expectedSize = width <= 820 ? 22 : Math.min(22, Math.max(19, width * .015));
+      await expect(quote).toHaveCSS('font-size', `${Number(expectedSize.toFixed(4))}px`);
+      await expect(quote).toHaveCSS('font-style', /italic|oblique/);
+      await expect(quote).toHaveCSS('text-align', 'justify');
+      await expect(attribution).toHaveCSS('text-align', 'right');
+      const fonts = await page.locator('.home-statement-section h4').evaluateAll((elements) => elements.map((element) => ({
+        family: getComputedStyle(element).fontFamily, size: Number.parseFloat(getComputedStyle(element).fontSize),
+      })));
+      expect(fonts[0].family).toContain('Manrope');
+      expect(fonts[1].family).toBe(fonts[0].family);
+      expect(fonts[1].size).toBeGreaterThanOrEqual(15);
+      expect(fonts[1].size).toBeLessThanOrEqual(18);
+      expect(fonts[1].size).toBeLessThan(fonts[0].size);
+      if (width <= 700) {
+        const box = (await quote.boundingBox())!;
+        expect(box.x).toBeGreaterThanOrEqual(30);
+        expect(width - box.x - box.width).toBeGreaterThanOrEqual(30);
+      }
+      await noOverflow(page);
+      if ([390, 1440].includes(width)) {
+        await page.locator('.home-statement-section').screenshot({ path: testInfo.outputPath(`${path === '/' ? 'home' : 'work'}-statement-${width}.png`) });
+      }
+    }
   }
+});
+
+test('home and work reuse the same translated quotation and reflect updates to the single home record', async ({ page, backend }) => {
+  await spanish(page);
+  const homeRecord = backend.state.tables.site_pages.find((row) => row.kind === 'home')!;
+  homeRecord.translations = {
+    en: { html: '<h4>Shared English quotation: "books and light".</h4><h4>Ray Bradbury<br/>Fahrenheit 451</h4>' },
+    ca: { html: '<h4>Cita catalana compartida: "llibres i llum".</h4><h4>Ray Bradbury<br/>Fahrenheit 451</h4>' },
+    de: { html: '<h4>Gemeinsames deutsches Zitat: „Bücher und Licht“.</h4><h4>Ray Bradbury<br/>Fahrenheit 451</h4>' },
+  };
+  const expectedQuotes: Record<string, string> = {
+    Español: 'Hay más de una forma de quemar un libro.',
+    English: 'Shared English quotation: «books and light».',
+    Català: 'Cita catalana compartida: «llibres i llum».',
+    Deutsch: 'Gemeinsames deutsches Zitat: «Bücher und Licht».',
+  };
+  await page.goto('/');
+  for (const language of ['Español', 'English', 'Català', 'Deutsch']) {
+    await page.locator('.header-language__trigger').click();
+    await page.getByRole('menuitemradio', { name: new RegExp(`^${language}(?:\\s|$)`) }).click();
+    const statement = page.locator('.home-statement-section .wp-content');
+    await expect(statement).toBeVisible();
+    await expect(statement.locator('h4').first()).toContainText(expectedQuotes[language]);
+    const homeHtml = await statement.innerHTML();
+    await headerNavigation(page, language === 'English' ? 'Work' : language === 'Deutsch' ? 'Werke' : 'Obra');
+    await expect(page).toHaveURL(/\/obra$/);
+    await expect(statement).toHaveCount(1);
+    expect(await statement.innerHTML()).toBe(homeHtml);
+    await page.locator('.site-header .brand').click();
+    await expect(page).toHaveURL(/\/$/);
+  }
+  // There is no quote-editing form: simulate a saved update to the existing
+  // content record, then verify both routes render it, without creating a copy.
+  homeRecord.html = '<h4>Cita revisada: "la memoria del color".</h4><h4>Ray Bradbury<br/>Fahrenheit 451</h4>';
+  await page.locator('.header-language__trigger').click();
+  await page.getByRole('menuitemradio', { name: /^Español/ }).click();
+  await page.reload();
+  await expect(page.locator('.home-statement-section h4').first()).toHaveText('Cita revisada: «la memoria del color».');
+  await headerNavigation(page, 'Obra');
+  await expect(page.locator('.home-statement-section h4').first()).toHaveText('Cita revisada: «la memoria del color».');
+  expect(backend.state.tables.site_pages.filter((row) => row.kind === 'home')).toHaveLength(1);
+  expect(backend.requests.filter((request) => !['GET', 'HEAD'].includes(request.method))).toEqual([]);
 });
 
 test('collections have dynamic frameless previews and a genuine empty state without overlapping neighboring cards', async ({ page, isMobile }) => {

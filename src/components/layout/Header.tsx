@@ -109,10 +109,22 @@ export function Header() {
     if (!isLanguageOpen && !isMenuOpen) return;
 
     function handlePointerDown(event: PointerEvent) {
+      // A non-focusable part of the header is outside the language selector too.
+      if (!languageTriggerRef.current?.parentElement?.contains(event.target as Node)) setIsLanguageOpen(false);
       if (!headerRef.current?.contains(event.target as Node)) {
         setIsLanguageOpen(false);
         setIsMenuOpen(false);
       }
+    }
+
+    function handleFocusIn(event: FocusEvent) {
+      if (!languageTriggerRef.current?.parentElement?.contains(event.target as Node)) setIsLanguageOpen(false);
+      if (!headerRef.current?.contains(event.target as Node)) setIsMenuOpen(false);
+    }
+
+    function handleWindowBlur() {
+      setIsLanguageOpen(false);
+      setIsMenuOpen(false);
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -125,9 +137,13 @@ export function Header() {
     }
 
     window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("focusin", handleFocusIn);
+    window.addEventListener("blur", handleWindowBlur);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("focusin", handleFocusIn);
+      window.removeEventListener("blur", handleWindowBlur);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isLanguageOpen, isMenuOpen]);
@@ -181,7 +197,9 @@ export function Header() {
         isHidden && !isMenuOpen && !isLanguageOpen ? " site-header--hidden" : ""
       }${isMenuOpen ? " site-header--menu-open" : ""}`}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        // Safari may blur a button to null before dispatching a tap's click.
+        // Only a known outside focus target proves that the user left the header.
+        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) {
           setIsMenuOpen(false);
           setIsLanguageOpen(false);
         }
@@ -258,7 +276,7 @@ export function Header() {
         <li
           className="header-socials__item header-language"
           onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsLanguageOpen(false);
+            if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) setIsLanguageOpen(false);
           }}
         >
           <button

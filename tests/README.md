@@ -7,7 +7,7 @@ Las pruebas de interfaz, la integración con Supabase y la comprobación del ser
 | Ubicación | Qué comprueba | Servicios externos y escrituras |
 | --- | --- | --- |
 | `unit/*.test.mjs` | Atribución del poema, párrafos y traducciones de obras, texto escapado, medidas físicas y geometría de ambientes; contrato del workflow exclusivo del edge, sin publicaciones Pages; también se conservan las pruebas del código heredado de correo con Deno y proveedor simulados. | Sin acceso remoto ni envíos de correo. La función Resend ya no pertenece al flujo activo. |
-| `e2e/*.spec.ts` | React real en Chromium de escritorio y móvil táctil emulado: navegación, idiomas, portada, footer, colecciones, visor, filtros, contactos `mailto:` y formularios de edición. El proyecto `mobile-webkit` añade las regresiones de altura del footer y elegibilidad de ambientes en WebKit. Incluye errores, reintentos, cancelaciones, archivos huérfanos y contenido oculto. | Supabase, Storage y Auth **simulados** mediante `helpers/mock-supabase.ts`; las solicitudes externas se interceptan. No modifica producción ni envía correos. |
+| `e2e/*.spec.ts` | React real en Chromium de escritorio y móvil táctil emulado: navegación, idiomas, portada, footer, colecciones, visor, filtros, contactos `mailto:` y formularios de edición. El proyecto `mobile-webkit` añade las regresiones de altura del footer, elegibilidad de ambientes y selección/persistencia de idiomas en WebKit. Incluye errores, reintentos, cancelaciones, archivos huérfanos y contenido oculto. | Supabase, Storage y Auth **simulados** mediante `helpers/mock-supabase.ts`; las solicitudes externas se interceptan. No modifica producción ni envía correos. |
 | `integration/*.test.mjs` | Pruebas locales de las guardas del ejecutor Supabase y del comprobador público: configuración, privilegios, HTTP, imágenes, CORS y honeypot. | Solicitudes simuladas o bloqueadas. No modifica servicios reales. |
 | `integration/supabase-editing.mjs` | Auth, `is_admin`, RLS, CRUD editorial, traducciones, saltos de línea, visibilidad, ajustes aislados, Storage y borrado en cascada. | **Integración real** contra el destino elegido. Crea y elimina datos temporales; requiere consentimiento explícito. |
 | `integration/catalog-live-rollback.sql` | Comprobación manual posterior a la migración: permisos, disponibilidad, edición, movimientos, conflictos, ocultación y borrados del catálogo. | **SQL real** mediante conexión de confianza, fuera de CI. Simula permisos dentro de una transacción y termina en `ROLLBACK`; no toca Storage ni crea usuarios. |
@@ -43,6 +43,14 @@ node --test tests/integration/*.test.mjs
 `e2e/room-eligibility.spec.ts` comprueba que solo se ofrece el botón de ambiente cuando hay medidas físicas válidas y un escenario compatible. La proporción de la imagen no sustituye sus medidas reales. Las pruebas de geometría y componentes mantienen por separado la cobertura del tamaño y encaje de las obras con medidas conocidas.
 
 Ambos archivos se ejecutan en Chromium y WebKit antes de publicar. Para una comprobación focal: `npx playwright test footer-viewport room-eligibility --project=mobile-webkit`.
+
+### Idiomas y texto compartido de Inicio/Obra
+
+`e2e/language-selector.spec.ts` cubre selección táctil/ratón, teclado, cierre al tocar fuera, cambio del idioma predeterminado en modo edición y persistencia. Modela además la secuencia de Safari en la que un botón pierde el foco hacia `null` antes del `click`: el menú debe seguir disponible hasta registrar la selección. Es una simulación explícita, no una prueba en un iPhone físico; WebKit en Linux puede enfocar botones al tocarlos y por sí solo no reproduce este caso.
+
+`e2e/language-preferences.spec.ts` retrasa la respuesta de ajustes para comprobar que nunca sobrescribe una elección explícita, incluso si el visitante escoge el idioma ya activo. Sin elección ni preferencia guardada, sigue aplicándose el idioma predeterminado configurado. Ambas suites se ejecutan también en `mobile-webkit`.
+
+`e2e/viewing.spec.ts` verifica que Inicio y `/obra` comparten el texto y sus traducciones, conservan las portadas y muestran la cita más compacta en escritorio sin reducirla en móvil.
 
 ## Integración real con Supabase local
 

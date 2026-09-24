@@ -536,6 +536,7 @@ const SitePreferencesContext = createContext<SitePreferencesContextValue | null>
 export function SitePreferencesProvider({ children }: { children: ReactNode }) {
   const hadStoredLanguage = useRef(readStoredLanguage() !== null);
   const didApplyDefaultLanguage = useRef(false);
+  const hasSelectedLanguage = useRef(false);
   const [language, setLanguage] = useState<SiteLanguage>(() => readStoredLanguage() ?? defaultSiteSettings.defaultLanguage);
   const [measurementUnit, setMeasurementUnit] = useState<MeasurementUnit>(() => readStoredMeasurementUnit());
   const [siteSettings, setSiteSettings] = useState(defaultSiteSettings);
@@ -545,6 +546,14 @@ export function SitePreferencesProvider({ children }: { children: ReactNode }) {
   const [areSiteSettingsLoaded, setAreSiteSettingsLoaded] = useState(false);
   const labels = translations[language];
 
+  const setPreferredLanguage = useCallback((nextLanguage: SiteLanguage) => {
+    // A visitor's explicit choice takes precedence over a late settings read,
+    // including choosing the already-active language before the first load.
+    hasSelectedLanguage.current = true;
+    setLanguage(nextLanguage);
+    window.localStorage.setItem(preferenceStorageKeys.language, nextLanguage);
+  }, []);
+
   const refreshSiteSettings = useCallback(async (savedSettings?: SiteSettings) => {
     // A successful save already returns the confirmed row. Avoid a second read
     // whose temporary failure could otherwise replace the saved colors with defaults.
@@ -552,7 +561,7 @@ export function SitePreferencesProvider({ children }: { children: ReactNode }) {
     setSiteSettings(nextSettings);
     setAreSiteSettingsLoaded(true);
 
-    if (!hadStoredLanguage.current && !didApplyDefaultLanguage.current) {
+    if (!hadStoredLanguage.current && !didApplyDefaultLanguage.current && !hasSelectedLanguage.current) {
       didApplyDefaultLanguage.current = true;
       setLanguage(nextSettings.defaultLanguage);
     }
@@ -563,9 +572,9 @@ export function SitePreferencesProvider({ children }: { children: ReactNode }) {
   }, [refreshSiteSettings]);
 
   useEffect(() => {
-    if (!areSiteSettingsLoaded) return;
     document.documentElement.lang = language;
     document.documentElement.dataset.theme = "light";
+    if (!areSiteSettingsLoaded) return;
     window.localStorage.setItem(preferenceStorageKeys.language, language);
   }, [areSiteSettingsLoaded, language]);
 
@@ -592,10 +601,10 @@ export function SitePreferencesProvider({ children }: { children: ReactNode }) {
       labels,
       measurementUnit,
       refreshSiteSettings,
-      setLanguage,
+      setLanguage: setPreferredLanguage,
       setMeasurementUnit,
     }),
-    [gradientSettings, labels, language, measurementUnit, refreshSiteSettings, siteSettings],
+    [gradientSettings, labels, language, measurementUnit, refreshSiteSettings, setPreferredLanguage, siteSettings],
   );
 
   return <SitePreferencesContext.Provider value={value}>{children}</SitePreferencesContext.Provider>;

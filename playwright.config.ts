@@ -25,7 +25,7 @@ export default defineConfig({
     { name: "mobile", use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 }, launchOptions: executablePath ? { executablePath } : {} } },
     {
       name: "mobile-webkit",
-      testMatch: ["**/footer-viewport.spec.ts", "**/room-eligibility.spec.ts"],
+      testMatch: ["**/footer-viewport.spec.ts", "**/room-eligibility.spec.ts", "**/language-selector.spec.ts", "**/language-preferences.spec.ts"],
       use: { ...devices["iPhone 13"], browserName: "webkit" },
     },
   ],
