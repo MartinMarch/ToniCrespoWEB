@@ -15,7 +15,9 @@ const TABLES = Object.freeze({
 const EMAIL_PATH = "/functions/v1/send-contact-email";
 const HONEYPOT_BODY = JSON.stringify({ website: "health-check" });
 const HEALTH_TIMEOUT_MS = 240_000;
-const REQUEST_SPACING_MS = 250;
+// The health check reads every published image. Keep its sustained Storage rate
+// below shared/CDN throttling thresholds; CI runs from shared GitHub IP ranges.
+const REQUEST_SPACING_MS = 600;
 
 export function publicHealthConfig(env) {
   if (!env.VITE_SUPABASE_URL?.trim() || !env.VITE_SUPABASE_ANON_KEY?.trim()) {

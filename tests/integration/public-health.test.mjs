@@ -272,10 +272,10 @@ test("requests share origin pacing and a 429 cooldown without blocking another o
   assert.equal(calls.length, 2, "Queued workers must not send during the shared cooldown.");
   await advance(1);
   assert.deepEqual(calls[2], { url: image, at: 2_000 });
-  await advance(249);
+  await advance(599);
   assert.equal(calls.length, 3);
   await advance(1);
-  assert.deepEqual(calls[3], { url: `${image}?second`, at: 2_250 });
+  assert.deepEqual(calls[3], { url: `${image}?second`, at: 2_600 });
   await Promise.all([first, second, otherOrigin]);
 });
 
