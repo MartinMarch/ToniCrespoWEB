@@ -8,11 +8,12 @@ const workflow = readFileSync(new URL(`.github/workflows/${workflowFile}`, root)
 const qualityWorkflow = readFileSync(new URL(".github/workflows/quality.yml", root), "utf8");
 const packageJson = JSON.parse(readFileSync(new URL("package.json", root), "utf8"));
 const jobs = workflow.slice(workflow.indexOf("\njobs:\n"));
+const healthJob = jobs.slice(jobs.indexOf("\n  public-health:\n"), jobs.indexOf("\n  publish-edge:\n"));
 const publish = jobs.slice(jobs.indexOf("\n  publish-edge:\n"));
 
 test("deployment only runs quality and edge publication, without Pages jobs or permissions", () => {
   assert.match(workflow, /^name: Deploy edge-proxy$/m);
-  assert.deepEqual([...jobs.matchAll(/^  ([\w-]+):$/gm)].map((match) => match[1]), ["quality", "publish-edge"]);
+  assert.deepEqual([...jobs.matchAll(/^  ([\w-]+):$/gm)].map((match) => match[1]), ["quality", "public-health", "publish-edge"]);
   assert.doesNotMatch(workflow, /actions\/(?:configure-pages|upload-pages-artifact|deploy-pages)@/);
   assert.doesNotMatch(workflow, /^\s+(?:pages|id-token):/m);
   assert.doesNotMatch(workflow, /github-pages|\/ToniCrespoWEB\/|dist\/404\.html/);
@@ -20,20 +21,21 @@ test("deployment only runs quality and edge publication, without Pages jobs or p
   assert.match(workflow, /^concurrency:\n  group: edge-proxy\n  cancel-in-progress: false$/m);
 });
 
-test("edge publication keeps the required tests and exactly one full public-health check before its build", () => {
+test("edge publication waits for one full public-health check after the required tests", () => {
   assert.match(jobs, /^    uses: \.\/\.github\/workflows\/quality\.yml$/m);
-  assert.match(publish, /^    needs: quality$/m);
+  assert.match(healthJob, /^    needs: quality$/m);
+  assert.match(publish, /^    needs: public-health$/m);
   assert.match(publish, /^    if: github\.ref == 'refs\/heads\/main'$/m);
   assert.match(publish, /^    permissions:\n      contents: write$/m);
   assert.match(qualityWorkflow, /^      - run: npm run test:ci$/m);
   assert.match(qualityWorkflow, /^        run: npm run test:supabase:local$/m);
   assert.equal([...workflow.matchAll(/run: npm run test:public-health\b/g)].length, 1);
-  assert.doesNotMatch(publish, /--skip-media|continue-on-error/);
-  const health = publish.indexOf("run: npm run test:public-health");
+  assert.doesNotMatch(healthJob, /--skip-media|continue-on-error/);
+  const health = healthJob.indexOf("run: npm run test:public-health");
   const build = publish.indexOf("run: npm run build");
   const archive = publish.indexOf("tar --sort=name");
   const release = publish.indexOf("gh release create");
-  assert.ok(health >= 0 && build > health && archive > build && release > archive);
+  assert.ok(health >= 0 && archive > build && release > archive);
 });
 
 test("edge artifacts preserve the root-domain build and consumer manifest contract", () => {
