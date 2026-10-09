@@ -42,17 +42,19 @@ test("production credentials are never used as fallback test credentials", () =>
   expectPreflightFailure({ args: ["--run"], message: /Faltan claves de prueba/ });
 });
 
-test("known production project requires an additional explicit override", () => {
+for (const host of ["aqleunaqzixdatttvqby.supabase.co", "supabase-bufon.duckdns.org"]) {
+test(`known production project ${host} requires an additional explicit override`, () => {
   expectPreflightFailure({
     args: ["--run"],
     env: {
-      SUPABASE_TEST_URL: "https://aqleunaqzixdatttvqby.supabase.co",
+      SUPABASE_TEST_URL: `https://${host}`,
       SUPABASE_TEST_ANON_KEY: "test-anon",
       SUPABASE_TEST_SERVICE_ROLE_KEY: "test-service",
     },
     message: /destino coincide con producción/,
   });
 });
+}
 
 test("configured production host is protected even when different from the known project", () => {
   expectPreflightFailure({

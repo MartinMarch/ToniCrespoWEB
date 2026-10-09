@@ -75,7 +75,7 @@ storage/<bucket>/<ruta original>
 auth/admin-users.json
 ```
 
-`auth/admin-users.json` solo conserva identificadores y emails de administradores. Las contraseñas, tokens y sesiones de Supabase Auth no se pueden ni se deben exportar.
+`auth/admin-users.json` solo conserva identificadores y emails de administradores. Este script no exporta credenciales ni sesiones. Una copia completa de PostgreSQL sí puede respaldar los hashes de contraseña de `auth.users`; debe almacenarse fuera de Git y con acceso restringido. La migración al homelab los conservó sin conocer ni cambiar las contraseñas.
 
 Para restaurar un snapshot en el proyecto indicado por el `.env` actual:
 
@@ -96,4 +96,4 @@ Se puede sustituir solo ese directorio local añadiendo `--overwrite`.
 
 ## Límite de una clave de servicio
 
-`SUPABASE_SERVICE_ROLE_KEY` permite exportar las tablas propias de la web y los buckets, pero no permite crear un `pg_dump` físico, aplicar DDL remoto ni recuperar contraseñas Auth. Para una copia física de PostgreSQL hace falta además una cadena de conexión de base de datos obtenida en Supabase Dashboard, y una instalación local de `pg_dump`.
+La API con `SUPABASE_SERVICE_ROLE_KEY` permite exportar el contenido y los buckets, pero no proporciona un volcado SQL ni devuelve contraseñas. Para una copia lógica completa puede utilizarse `supabase db dump` con conexión PostgreSQL; los archivos de Storage se copian aparte. En la migración al homelab se exportaron datos y Auth por SQL mediante el conector, se reconstruyó el esquema con las migraciones y se comparó con el catálogo real, y se verificaron todos los archivos por SHA-256. Véase [la guía operativa](../context/supabase-autoalojado.md).

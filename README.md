@@ -5,7 +5,7 @@ Web de Toni Crespo construida con React, TypeScript y Supabase. El contenido edi
 ## Estado
 
 - Frontend: Vite + React + TypeScript en `src/`.
-- Contenido y Storage: Supabase.
+- Contenido, Auth y Storage: Supabase autoalojado en el homelab, API `https://supabase-bufon.duckdns.org`.
 - Esquema: `supabase/migrations/`.
 - Copias locales recuperables: `supabase/backups/`.
 - Contexto operativo para agentes: `context/`.
@@ -39,6 +39,8 @@ NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt npm install @rollup/rollu
 ```
 
 ## Supabase
+
+La configuración pública de producción está versionada en [`.env.production`](.env.production): URL y clave **publishable**, apta para el navegador. El build de Vite la carga automáticamente; Actions usa el mismo archivo para la comprobación pública y el build. No contiene claves de servicio ni contraseñas. El registro público está cerrado; los administradores existentes conservan sus cuentas. [Migración y recuperación](context/supabase-autoalojado.md).
 
 Copia `.env.example` a `.env` solo cuando existan claves reales locales. No commitear `.env`.
 
@@ -89,7 +91,7 @@ npm run restore:supabase -- --latest
 npm run restore:supabase -- --latest --write
 ```
 
-La restauración hace `upsert` y no elimina datos remotos. Las URLs de Storage se adaptan al proyecto configurado en el `.env`; las cuentas Auth se siguen creando externamente en Supabase, porque nunca se respaldan contraseñas ni sesiones. Consulta [supabase/README.md](supabase/README.md) para el flujo completo.
+La restauración hace `upsert` y no elimina datos remotos. Las URLs de Storage se adaptan al proyecto configurado en el `.env`. Este script no respalda ni restaura las credenciales Auth; una copia completa de PostgreSQL sí puede conservar sus hashes de contraseña y debe protegerse como un secreto. Consulta [supabase/README.md](supabase/README.md) para el flujo completo.
 
 ## Pruebas y despliegue
 
@@ -113,11 +115,11 @@ La comprobación pública valida el contenido, las imágenes reales y el formato
 
 El workflow reutilizable [quality.yml](.github/workflows/quality.yml) ejecuta las pruebas del frontend y el Supabase temporal en paralelo. [Deploy edge-proxy](.github/workflows/deploy-pages.yml) lo invoca para el mismo commit de `main` y espera su éxito antes de comprobar el Supabase público, compilar y publicar la release para el edge. Cualquier fallo bloquea la publicación. Las PR y otras ramas ejecutan Quality sin publicar.
 
-GitHub sólo necesita los secretos `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` para la comprobación pública y el build. Las pruebas de edición usan credenciales locales efímeras: no añadas la clave de servicio de producción a Actions.
+GitHub carga `.env.production` para la comprobación pública y el build. Los antiguos secretos `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` de Cloud ya no se consumen. Las pruebas de edición usan credenciales locales efímeras: no añadas la clave de servicio de producción a Actions. Para comprobar el destino publicado desde Node 24: `node --env-file=.env.production tests/integration/public-health.mjs`.
 
 ### Publicación en edge-proxy
 
-El único destino de despliegue es el edge-proxy, que sirve la web en [https://tonicrespo.duckdns.org](https://tonicrespo.duckdns.org). Ya no se compila ni publica para GitHub Pages; el workflow tampoco solicita permisos de Pages ni OIDC.
+El único destino de despliegue es el edge-proxy, que sirve la web en [https://tonicrespo.com](https://tonicrespo.com), `www.tonicrespo.com` y `tonicrespo.duckdns.org`. Ya no se compila ni publica para GitHub Pages; el workflow tampoco solicita permisos de Pages ni OIDC.
 
 El nombre visible del workflow es `Deploy edge-proxy`. Se conserva el archivo `deploy-pages.yml` y ese mismo identificador en `release.json` para mantener la compatibilidad con la validación del consumidor del edge. Renombrarlo requiere actualizar también esa configuración en el servidor.
 

@@ -40,9 +40,17 @@ test("edge publication waits for one full public-health check after the required
 
 test("edge artifacts preserve the root-domain build and consumer manifest contract", () => {
   assert.match(publish, /^          VITE_BASE_PATH: \/$/m);
-  for (const variable of ["VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY"]) {
-    assert.ok(publish.includes(`${variable}: \${{ secrets.${variable} }}`));
+  // Both the live gate and the artifact must use the same versioned public
+  // configuration. Obsolete Cloud repository secrets must not override it.
+  for (const job of [healthJob, publish]) {
+    assert.ok(job.includes('run: cat .env.production >> "$GITHUB_ENV"'));
+    assert.doesNotMatch(job, /secrets\.VITE_SUPABASE/);
   }
+  const production = readFileSync(new URL(".env.production", root), "utf8");
+  assert.match(production, /^VITE_SUPABASE_URL=https:\/\/supabase-bufon\.duckdns\.org$/m);
+  assert.match(production, /^VITE_SUPABASE_ANON_KEY=sb_publishable_[A-Za-z0-9_-]+$/m);
+  assert.equal(production.trim().split("\n").length, 2);
+  assert.doesNotMatch(production, /sb_secret_|SERVICE_ROLE|PASSWORD/);
   assert.ok(publish.includes(`"workflow": "${workflowFile}"`));
   assert.match(publish, /"base_path": "\/"/);
   assert.match(publish, /"commit": os\.environ\["GITHUB_SHA"\]/);

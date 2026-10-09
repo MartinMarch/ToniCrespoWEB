@@ -34,6 +34,7 @@ if (!config.url || !config.anonKey || !config.serviceRoleKey) {
 const targetUrl = new URL(config.url);
 const productionHosts = new Set([
   "aqleunaqzixdatttvqby.supabase.co",
+  "supabase-bufon.duckdns.org",
   ...(env.VITE_SUPABASE_URL ? [new URL(env.VITE_SUPABASE_URL).host] : []),
 ]);
 const isProduction = productionHosts.has(targetUrl.host);

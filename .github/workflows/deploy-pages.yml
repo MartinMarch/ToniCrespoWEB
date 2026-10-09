@@ -36,14 +36,14 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Load public production configuration
+        run: cat .env.production >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: npm ci
 
       - name: Check live Supabase, contact address and published images (read-only)
         run: npm run test:public-health
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
   publish-edge:
     name: Publish edge-proxy release
@@ -63,6 +63,9 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Load public production configuration
+        run: cat .env.production >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: npm ci
 
@@ -70,8 +73,6 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: /
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Package static files and deployment metadata
         run: |
